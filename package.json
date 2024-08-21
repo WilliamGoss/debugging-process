@@ -2,9 +2,10 @@
   "name": "debugging-process",
   "displayName": "Debugging Process",
   "description": "Helps to understand debugging process",
+  "publisher": "uiuc-goss",
   "version": "0.0.1",
   "engines": {
-    "vscode": "^1.91.1"
+    "vscode": "^1.92.0"
   },
   "categories": [
     "Other"
