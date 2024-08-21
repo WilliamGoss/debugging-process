@@ -1,0 +1,79 @@
+{
+  "name": "debugging-process",
+  "displayName": "Debugging Process",
+  "description": "Helps to understand debugging process",
+  "version": "0.0.1",
+  "engines": {
+    "vscode": "^1.91.1"
+  },
+  "categories": [
+    "Other"
+  ],
+  "main": "./dist/extension.js",
+  "activationEvents": [],
+"contributes": {
+  "views": {
+			"explorer": [
+				{
+					"type": "webview",
+					"id": "debugPanel.panelView",
+					"name": "Debugging"
+				}
+			]
+		},
+    "commands": [
+        {
+            "command": "extension.showD3Graph",
+            "title": "Show D3 Graph"
+        },
+      {
+				"command": "debugPanel.addColor",
+				"category": "Debug Panel",
+				"title": "Add Color"
+			},
+			{
+				"command": "debugPanel.meow",
+				"category": "Debug Panel",
+				"title": "New Bug",
+				"icon": "$(bug)"
+			},
+			{
+				"command": "debugPanel.clearColors",
+				"category": "Debug Panel",
+				"title": "Checkpoint",
+				"icon": "$(debug-breakpoint-data)"
+			}
+    ]
+},
+  "scripts": {
+    "vscode:prepublish": "npm run package",
+    "compile": "webpack",
+    "watch": "webpack --watch",
+    "package": "webpack --mode production --devtool hidden-source-map",
+    "compile-tests": "tsc -p . --outDir out",
+    "watch-tests": "tsc -p . -w --outDir out",
+    "pretest": "npm run compile-tests && npm run compile && npm run lint",
+    "lint": "eslint src --ext ts",
+    "test": "vscode-test"
+  },
+  "devDependencies": {
+    "@types/d3": "^7.4.3",
+    "@types/dagre-d3": "^0.6.6",
+    "@types/mocha": "^10.0.7",
+    "@types/node": "20.x",
+    "@types/vscode": "^1.92.0",
+    "@typescript-eslint/eslint-plugin": "^7.14.1",
+    "@typescript-eslint/parser": "^7.11.0",
+    "@vscode/test-cli": "^0.0.9",
+    "@vscode/test-electron": "^2.4.0",
+    "eslint": "^8.57.0",
+    "ts-loader": "^9.5.1",
+    "typescript": "^5.4.5",
+    "webpack": "^5.92.1",
+    "webpack-cli": "^5.1.4"
+  },
+  "dependencies": {
+    "d3": "^7.9.0",
+    "dagre-d3": "^0.6.4"
+  }
+}
