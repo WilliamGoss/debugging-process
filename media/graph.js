@@ -310,5 +310,24 @@ window.addEventListener('message', event => {
         let updatedActiveNode = message.activeNode;
         let newTree = message.treeData;
         updateGraph(newTree, updatedActiveNode);
+    } else if (message.command === 'updateNodeText') {
+        updateNodeText(message.nodeId, message.newText);
     }
 });
+
+function updateNodeText(nodeId, newText) {
+    const nodeGroup = d3.select(`g.node[data-id="${nodeId}"]`);
+
+    if (nodeGroup.empty()) {
+        console.error(`Node with ID ${nodeId} not found`);
+        return;
+    }
+
+    // Update the main label text
+    nodeGroup.select('text') // Selects the first text element (node label)
+        .text(newText.slice(0, 12)); // Update with new text, truncated to 12 characters
+
+    // Update the additional info text
+    nodeGroup.select('text.info') // Selects the text with class 'info'
+        .text(newText); // Update with full new text
+}

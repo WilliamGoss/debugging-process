@@ -123,6 +123,15 @@ function activate(context) {
             vscode__WEBPACK_IMPORTED_MODULE_0__.window.showErrorMessage('No graph panel is currently open.');
         }
     }));
+    // Register the 'updateNodeText' command
+    context.subscriptions.push(vscode__WEBPACK_IMPORTED_MODULE_0__.commands.registerCommand('extension.updateNodeText', (nodeId, newText) => {
+        if (graphView) {
+            graphView.webview.postMessage({ command: 'updateNodeText', nodeId, newText });
+        }
+        else {
+            vscode__WEBPACK_IMPORTED_MODULE_0__.window.showErrorMessage('No graph panel is currently open.');
+        }
+    }));
 }
 /*
 
@@ -255,6 +264,12 @@ class DebugViewProvider {
                         const activeNode = data.activeNode;
                         vscode__WEBPACK_IMPORTED_MODULE_0__.commands.executeCommand('extension.updateGraph', treeData, activeNode);
                         break;
+                    }
+                case 'updateNodeText':
+                    {
+                        const activeNode = data.activeNode;
+                        const newText = data.newText;
+                        vscode__WEBPACK_IMPORTED_MODULE_0__.commands.executeCommand('extension.updateNodeText', activeNode, newText);
                     }
             }
         });

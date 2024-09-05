@@ -60,6 +60,17 @@ export function activate(context: vscode.ExtensionContext) {
             }
         })
     );
+
+	// Register the 'updateNodeText' command
+    context.subscriptions.push(
+        vscode.commands.registerCommand('extension.updateNodeText', (nodeId: number, newText: string) => {
+            if (graphView) {
+                graphView.webview.postMessage({ command: 'updateNodeText', nodeId, newText });
+            } else {
+                vscode.window.showErrorMessage('No graph panel is currently open.');
+            }
+        })
+    );
 }
 
 /*
@@ -210,6 +221,12 @@ class DebugViewProvider implements vscode.WebviewViewProvider {
 						const activeNode = data.activeNode;
 						vscode.commands.executeCommand('extension.updateGraph', treeData, activeNode);
 						break;
+					}
+				case 'updateNodeText':
+					{
+						const activeNode = data.activeNode;
+						const newText = data.newText;
+						vscode.commands.executeCommand('extension.updateNodeText', activeNode, newText);
 					}
 			}
 		});

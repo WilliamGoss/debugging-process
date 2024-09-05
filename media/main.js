@@ -148,6 +148,7 @@
     function updateText(event) {
         nodes[activeNode].name = event.target.value;
         vscode.setState({root: root, nodeCount: nodeCount, activeNode: activeNode, nodes: nodes});
+        vscode.postMessage({ type: 'updateNodeText', command: "showD3Graph", newText: event.target.value, activeNode: activeNode });
     }
 
     //creates the tree data for the graph

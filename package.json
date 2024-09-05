@@ -31,6 +31,10 @@
           "command": "extension.updateD3Graph",
           "title": "Update Graph"
         },
+        {
+          "command": "extension.updateNodeText",
+          "title": "Update Node Text"
+        },
       {
 				"command": "debugPanel.addColor",
 				"category": "Debug Panel",
