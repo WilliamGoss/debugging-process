@@ -93,6 +93,15 @@
                     updateExplorationText();
                     break;
                 }
+            case 'addNode':
+                {
+                    let newNode = {name: "New Node", id: nodeCount, children: []};
+                    nodes[nodeCount] = newNode;
+                    nodes[message.data].children.push(nodeCount);
+                    nodeCount = nodeCount + 1;
+                    vscode.setState({root: root, nodeCount: nodeCount, activeNode: activeNode, nodes: nodes});
+                    break;
+                }
         }
     });
 

@@ -101,6 +101,9 @@ function activate(context) {
                     //This closes the webview, but might not want it
                     //panel.dispose();
                     break;
+                case 'addNode':
+                    provider.receiveInformation("addNode", message.nodeId);
+                    break;
             }
         }, undefined, context.subscriptions);
     }));
