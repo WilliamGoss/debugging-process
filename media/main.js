@@ -5,11 +5,13 @@
     const vscode = acquireVsCodeApi();
 
     //get node tree state
-    const oldState = vscode.getState() || { treeData: {}, nodeCount: 0, activeNode: 0 };
+    const oldState = vscode.getState() || { nodesData: {root: 0, nodeCount: 0, activeNode: 0, nodes: {}} };
+    console.log(oldState);
     //const oldState = { treeData: {}, nodeCount: 0, activeNode: 0 };
-    let treeData = oldState.treeData;
+    let nodes = oldState.nodes;
     let nodeCount = oldState.nodeCount;
     let activeNode = oldState.activeNode;
+    let root = oldState.root;
 
     let viewId = '';
     
@@ -29,7 +31,7 @@
 			<br/>
             <br/>
 			<label for="new-exploration">Actions Taken</label>
-			<textarea name="exploration" cols="40" rows="5"></textarea>
+			<textarea id="explorationText" name="exploration" cols="40" rows="5"></textarea>
             <br/>
 			<button id="saveExploration">Save Exploration</button>
             <br/>
@@ -45,8 +47,6 @@
             <br/>
             <button id="clearState">Clear State</button>
             <br/>
-            <br/>
-            <button id="newChild">New Child Node</button>
         </div>
     `;
 
@@ -57,17 +57,18 @@
     document.getElementById('startIssue').addEventListener('click', () => {showView('view2'); createNewIssue();});
     /* Overall View */
     // @ts-ignore: Object is possibly 'null'.
-    document.getElementById('showTreeButton').addEventListener('click', () => showTree());
+    document.getElementById('showTreeButton').addEventListener('click', () => showTree(nodes));
     document.getElementById('saveExploration').addEventListener('click', () => updateNodeText());
+    //update node text
+    document.getElementById('explorationText').addEventListener('input', (event) => updateText(event));
 
     /* TESTING ONLY */
     document.getElementById('clearState')?.addEventListener('click', () => emptyState());
-    document.getElementById('newChild')?.addEventListener('click', () => createNewChild());
 
-    showView(treeData);
+    showView(nodes);
 
-    function showView(treeData) {
-        if (JSON.stringify(treeData) === '{}') {
+    function showView(nodes) {
+        if (Object.keys(nodes).length === 0) {
             viewId = 'view1';
         } else {
             viewId= 'view2';
@@ -88,7 +89,7 @@
             case 'activeNode':
                 {
                     activeNode = message.data;
-                    vscode.setState({treeData: treeData, nodeCount: nodeCount, activeNode: message.data});
+                    vscode.setState({root: root, nodeCount: nodeCount, activeNode: message.data, nodes: nodes});
                     updateExplorationText();
                     break;
                 }
@@ -98,45 +99,31 @@
     function createNewIssue() {
         const textAreaObject = document.querySelector('#view1 textarea');
         const userIssueText = textAreaObject.value;
-        let newIssueTree = {name: userIssueText, id: nodeCount, children: []};
-        treeData = newIssueTree;
+        let newNodes = {};
+        newNodes[0] = {name: userIssueText, id: 0, children: []};
         nodeCount = nodeCount + 1;
-        vscode.setState({treeData: newIssueTree, nodeCount: nodeCount, activeNode: nodeCount - 1});
+        vscode.setState({root: 0, nodeCount: nodeCount, activeNode: 0, nodes: newNodes});
         textAreaObject.value = '';
         updateExplorationText();
     }
 
     /* For testing only! */
     function emptyState() {
-        treeData = {};
         nodeCount = 0;
         activeNode = 0;
-        vscode.setState({treeData: {}, nodeCount: 0, activeNode: 0});
-        showView(treeData);
+        vscode.setState({root: -1, nodeCount: nodeCount, activeNode: activeNode, nodes: {}});
+        showView([]);
     }
 
-    function createNewChild() {
-        let emptyNode = {name: "New Node", id: nodeCount, children: []};
-        nodeCount = nodeCount + 1;
-        let newTree = addChildById(treeData, activeNode, emptyNode);
-        /* To make child active, it would be activeNode - 1 */
-        vscode.setState({treeData: newTree, nodeCount: nodeCount, activeNode: activeNode});
-    }
-
-    function showTree() {
+    function showTree(nodes) {
+        let treeData = generateTree(nodes);
         vscode.postMessage({ type: 'showGraph', command: "showD3Graph", treeData: treeData, activeNode: activeNode });
     }
 
-    function updateNodeText() {
-        const nodeTextArea = document.querySelector('#view2 textarea[name="exploration"]');
-        const nodeText = nodeTextArea.value;
-        let newTree = changeNodeText(treeData, activeNode, nodeText);
-        vscode.setState({treeData: newTree, nodeCount: nodeCount, activeNode: activeNode});
-    }
-
+    //updates the text in the box with the selected node -- used when a new active node is selected or on the initial extension load
     function updateExplorationText() {
         // Find the node with the matching id
-        const node = findNodeById(treeData, activeNode);
+        const node = nodes[activeNode];
         if (node) {
             // Update the textarea content
             const textarea = document.querySelector('#view2 textarea[name="exploration"]');
@@ -147,67 +134,23 @@
         }
     }
 
-    //helper function for finding the correct node
-    function findNodeById(node, id) {
-        if (node.id === id) {
-            return node;
-        }
-        if (node.children) {
-            for (let child of node.children) {
-                let result = findNodeById(child, id);
-                if (result) {
-                    return result;
-                }
-            }
-        }
+    function updateText(event) {
+        nodes[activeNode].name = event.target.value;
+        vscode.setState({root: root, nodeCount: nodeCount, activeNode: activeNode, nodes: nodes});
     }
 
-    //help function for adding children nodes
-    function addChildById(tree, id, newChild) {
-        // Initialize a queue with the root node
-        const queue = [tree];
-
-        while (queue.length > 0) {
-            const currentNode = queue.shift(); // Dequeue the first element
-
-            // Check if the current node's id matches
-            if (currentNode.id === id) {
-                currentNode.children.push(newChild);
-                return tree;  // Return the updated tree
-            }
-
-            // Enqueue all children of the current node
-            for (let child of currentNode.children) {
-                queue.push(child);
-            }
+    //creates the tree data for the graph
+    function generateTree(nodes) {
+        function buildNode(nodeId) {
+            const node = nodes[nodeId];
+            return {
+                name: node.name,
+                id: node.id,
+                children: node.children.map(childId => buildNode(childId))
+            };
         }
-        
-        return tree;  // Return the original tree if it wasn't found
-        //Should be an error if this happens!
-    }
 
-    //helper function for updating text -- SHOULD REWRITE THE ONE ABOVE TO DO BOTH!!
-    function changeNodeText(tree, id, newText) {
-        // Initialize a queue with the root node
-        const queue = [tree];
-
-        while (queue.length > 0) {
-            const currentNode = queue.shift(); // Dequeue the first element
-
-            // Check if the current node's id matches
-            if (currentNode.id === id) {
-                currentNode.name = newText;
-                return tree;  // Return the updated tree
-            }
-
-            // Enqueue all children of the current node
-            for (let child of currentNode.children) {
-                queue.push(child);
-            }
-        }
-        
-        return tree;  // Return the original tree if it wasn't found
-        //Should be an error if this happens!
+        return buildNode(root);
     }
 
 }());
