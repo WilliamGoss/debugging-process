@@ -1,1 +1,276 @@
-(()=>{"use strict";var t={d:(e,n)=>{for(var i in n)t.o(n,i)&&!t.o(e,i)&&Object.defineProperty(e,i,{enumerable:!0,get:n[i]})},o:(t,e)=>Object.prototype.hasOwnProperty.call(t,e),r:t=>{"undefined"!=typeof Symbol&&Symbol.toStringTag&&Object.defineProperty(t,Symbol.toStringTag,{value:"Module"}),Object.defineProperty(t,"__esModule",{value:!0})}},e={};t.r(e),t.d(e,{activate:()=>i,deactivate:()=>r});const n=require("vscode");function i(t){const e=new o(t.extensionUri);t.subscriptions.push(n.window.registerWebviewViewProvider(o.viewType,e)),t.subscriptions.push(n.commands.registerCommand("extension.showD3Graph",((i={},o={})=>{const r=n.window.createWebviewPanel("d3Graph","D3 Graph",n.ViewColumn.One,{enableScripts:!0});r.webview.html=function(t,e,i,o){const r=t.asWebviewUri(n.Uri.joinPath(e,"media","graph.js"));return`<!DOCTYPE html>\n    <html lang="en">\n    <head>\n        <meta charset="UTF-8">\n        <meta name="viewport" content="width=device-width, initial-scale=1.0">\n        <title>D3 Directed Graph</title>\n        <style>\n            body {\n                margin: 0;\n                padding: 0;\n                overflow: hidden;\n            }\n            #graph {\n                width: 100vw;\n                height: 100vh;\n                border: 1px solid black;\n            }\n        </style>\n    </head>\n    <body>\n        <div id="graph">Loading...</div>\n        <script type="module">\n\t\t\tconst treeData = ${JSON.stringify(i)};\n\t\t\tconst activeNode = ${o};\n\t\t\tconst vscode = acquireVsCodeApi();\n            import * as d3 from 'https://cdn.jsdelivr.net/npm/d3@7/+esm';\n\n            // Load the external script and call createGraph function\n            const script = document.createElement('script');\n            script.type = 'module';\n            script.src = '${r}';\n            document.body.appendChild(script);\n\n            script.onload = () => {\n                import('${r}').then(module => {\n                    module.createGraph(treeData, vscode, activeNode);\n                });\n            };\n        <\/script>\n    </body>\n    </html>`}(r.webview,t.extensionUri,i,o),r.webview.onDidReceiveMessage((t=>{"updateActiveNode"===t.command&&(e.receiveInformation("activeNode",t.activeNode),r.dispose())}),void 0,t.subscriptions)})))}class o{constructor(t){this._extensionUri=t}resolveWebviewView(t,e,i){this._view=t,t.webview.options={enableScripts:!0,localResourceRoots:[this._extensionUri]},t.webview.html=this._getHtmlForWebview(t.webview),t.webview.onDidReceiveMessage((t=>{switch(t.type){case"showGraph":{const e=t.treeData,i=t.activeNode;n.commands.executeCommand("extension.showD3Graph",e,i);break}}}))}receiveInformation(t,e){var n;let i={type:t,data:e};null===(n=this._view)||void 0===n||n.webview.postMessage(i)}_getHtmlForWebview(t){const e=t.asWebviewUri(n.Uri.joinPath(this._extensionUri,"media","main.js")),i=t.asWebviewUri(n.Uri.joinPath(this._extensionUri,"media","reset.css")),o=t.asWebviewUri(n.Uri.joinPath(this._extensionUri,"media","vscode.css")),r=t.asWebviewUri(n.Uri.joinPath(this._extensionUri,"media","main.css")),s=function(){let t="";const e="ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789";for(let n=0;n<32;n++)t+=e.charAt(Math.floor(62*Math.random()));return t}();return`<!DOCTYPE html>\n\t\t\t<html lang="en">\n\t\t\t<head>\n\t\t\t\t<meta charset="UTF-8">\n\n\t\t\t\t\x3c!--\n\t\t\t\t\tUse a content security policy to only allow loading styles from our extension directory,\n\t\t\t\t\tand only allow scripts that have a specific nonce.\n\t\t\t\t\t(See the 'webview-sample' extension sample for img-src content security policy examples)\n\t\t\t\t--\x3e\n\t\t\t\t<meta http-equiv="Content-Security-Policy" content="default-src 'none'; style-src ${t.cspSource}; script-src 'nonce-${s}';">\n\n\t\t\t\t<meta name="viewport" content="width=device-width, initial-scale=1.0">\n\n                <link href="${i}" rel="stylesheet">\n\t\t\t\t<link href="${o}" rel="stylesheet">\n\t\t\t\t<link href="${r}" rel="stylesheet">\n\n\t\t\t\t<title>Debug</title>\n\t\t\t</head>\n\t\t\t\t<body>\n\t\t\t\t<div class="new-bug">\n\t\t\t\t\t<label for="new-bug">New Bug:</label>\n\t\t\t\t\t<input type="text" id="new-bug" name="new-bug" />\n\t\t\t\t\t<br/>\n\t\t\t\t\t<button class="add-color-button">Start Session</button>\n\t\t\t\t</div>\n\t\t\t\t<br/>\n\t\t\t\t<hr/>\n\t\t\t\t<br/>\n\t\t\t\t<div class="new-attempt">\n\t\t\t\t\t<p>\n\t\t\t\t\t\t<b>Bug</b>: No text rendering on page.\n\t\t\t\t\t</p>\n\t\t\t\t\t<br/>\n\t\t\t\t\t<label for="new-attempt">Attempted Solution</label>\n\t\t\t\t\t<textarea name="attempt" cols="40" rows="5">\n\t\t\t\t\t</textarea>\n\t\t\t\t\t<br/>\n\t\t\t\t\t<button class="add-color-button">Add ?Checkpoint?</button>\n\t\t\t\t</div>\n\t\t\t\t<br/>\n\t\t\t\t<hr/>\n\t\t\t\t<br/>\n\t\t\t\t<button class="show-tree-button">Show D3 Graph</button>\n\t\t\t\t<br/>\n\t\t\t\t<ul class="color-list">\n\t\t\t\t</ul>\n\t\t\t\t<br/>\n\t\t\t\t<hr/>\n\t\t\t\t<br/>\n\t\t\t\t<p>\n\t\t\t\t<b>Bug</b>: No text rendering on page.\n\t\t\t\t</p>\n\t\t\t\t<br/>\n\t\t\t\t<div class="attempted-solution">\n\t\t\t\t\t<label for="attempt">Attempted Solution</label>\n\t\t\t\t\t<textarea name="attempt" cols="40" rows="5">Added print statements to the database call to check and see what data is being returned.?Should this be editable?\n\t\t\t\t\t</textarea>\n\t\t\t\t</div>\n\t\t\t\t<br/>\n\t\t\t\t<button class="meow-button">Restore ?Checkpoint?</button>\n\t\t\t\t<button class="delete-checkpoint-button">?Delete?</button>\n\t\n\t\t\t\t<script nonce="${s}" src="${e}"><\/script>\n\t\t\t\t<br/>\n\t\t\t\t<br/>\n\t\t\t\t</body>\n\t\t\t</html>`}}function r(){}o.viewType="debugPanel.panelView",module.exports=e})();
+/******/ (() => { // webpackBootstrap
+/******/ 	"use strict";
+/******/ 	var __webpack_modules__ = ([
+/* 0 */,
+/* 1 */
+/***/ ((module) => {
+
+module.exports = require("vscode");
+
+/***/ })
+/******/ 	]);
+/************************************************************************/
+/******/ 	// The module cache
+/******/ 	var __webpack_module_cache__ = {};
+/******/ 	
+/******/ 	// The require function
+/******/ 	function __webpack_require__(moduleId) {
+/******/ 		// Check if module is in cache
+/******/ 		var cachedModule = __webpack_module_cache__[moduleId];
+/******/ 		if (cachedModule !== undefined) {
+/******/ 			return cachedModule.exports;
+/******/ 		}
+/******/ 		// Create a new module (and put it into the cache)
+/******/ 		var module = __webpack_module_cache__[moduleId] = {
+/******/ 			// no module.id needed
+/******/ 			// no module.loaded needed
+/******/ 			exports: {}
+/******/ 		};
+/******/ 	
+/******/ 		// Execute the module function
+/******/ 		__webpack_modules__[moduleId](module, module.exports, __webpack_require__);
+/******/ 	
+/******/ 		// Return the exports of the module
+/******/ 		return module.exports;
+/******/ 	}
+/******/ 	
+/************************************************************************/
+/******/ 	/* webpack/runtime/compat get default export */
+/******/ 	(() => {
+/******/ 		// getDefaultExport function for compatibility with non-harmony modules
+/******/ 		__webpack_require__.n = (module) => {
+/******/ 			var getter = module && module.__esModule ?
+/******/ 				() => (module['default']) :
+/******/ 				() => (module);
+/******/ 			__webpack_require__.d(getter, { a: getter });
+/******/ 			return getter;
+/******/ 		};
+/******/ 	})();
+/******/ 	
+/******/ 	/* webpack/runtime/define property getters */
+/******/ 	(() => {
+/******/ 		// define getter functions for harmony exports
+/******/ 		__webpack_require__.d = (exports, definition) => {
+/******/ 			for(var key in definition) {
+/******/ 				if(__webpack_require__.o(definition, key) && !__webpack_require__.o(exports, key)) {
+/******/ 					Object.defineProperty(exports, key, { enumerable: true, get: definition[key] });
+/******/ 				}
+/******/ 			}
+/******/ 		};
+/******/ 	})();
+/******/ 	
+/******/ 	/* webpack/runtime/hasOwnProperty shorthand */
+/******/ 	(() => {
+/******/ 		__webpack_require__.o = (obj, prop) => (Object.prototype.hasOwnProperty.call(obj, prop))
+/******/ 	})();
+/******/ 	
+/******/ 	/* webpack/runtime/make namespace object */
+/******/ 	(() => {
+/******/ 		// define __esModule on exports
+/******/ 		__webpack_require__.r = (exports) => {
+/******/ 			if(typeof Symbol !== 'undefined' && Symbol.toStringTag) {
+/******/ 				Object.defineProperty(exports, Symbol.toStringTag, { value: 'Module' });
+/******/ 			}
+/******/ 			Object.defineProperty(exports, '__esModule', { value: true });
+/******/ 		};
+/******/ 	})();
+/******/ 	
+/************************************************************************/
+var __webpack_exports__ = {};
+__webpack_require__.r(__webpack_exports__);
+/* harmony export */ __webpack_require__.d(__webpack_exports__, {
+/* harmony export */   activate: () => (/* binding */ activate),
+/* harmony export */   deactivate: () => (/* binding */ deactivate)
+/* harmony export */ });
+/* harmony import */ var vscode__WEBPACK_IMPORTED_MODULE_0__ = __webpack_require__(1);
+/* harmony import */ var vscode__WEBPACK_IMPORTED_MODULE_0___default = /*#__PURE__*/__webpack_require__.n(vscode__WEBPACK_IMPORTED_MODULE_0__);
+
+function activate(context) {
+    const provider = new DebugViewProvider(context.extensionUri);
+    context.subscriptions.push(vscode__WEBPACK_IMPORTED_MODULE_0__.window.registerWebviewViewProvider(DebugViewProvider.viewType, provider));
+    //GRAPH
+    context.subscriptions.push(vscode__WEBPACK_IMPORTED_MODULE_0__.commands.registerCommand('extension.showD3Graph', (treeData = {}, activeNode = {}) => {
+        const panel = vscode__WEBPACK_IMPORTED_MODULE_0__.window.createWebviewPanel('d3Graph', 'D3 Graph', vscode__WEBPACK_IMPORTED_MODULE_0__.ViewColumn.One, {
+            enableScripts: true
+        });
+        panel.webview.html = getWebviewContent(panel.webview, context.extensionUri, treeData, activeNode);
+        panel.webview.onDidReceiveMessage(message => {
+            switch (message.command) {
+                case 'updateActiveNode':
+                    provider.receiveInformation("activeNode", message.activeNode);
+                    //This closes the webview, but might not want it
+                    //panel.dispose();
+                    break;
+            }
+        }, undefined, context.subscriptions);
+    }));
+}
+function getWebviewContent(webview, extensionUri, treeData, activeNode) {
+    const scriptUri = webview.asWebviewUri(vscode__WEBPACK_IMPORTED_MODULE_0__.Uri.joinPath(extensionUri, 'media', 'graph.js'));
+    return `<!DOCTYPE html>
+    <html lang="en">
+    <head>
+        <meta charset="UTF-8">
+        <meta name="viewport" content="width=device-width, initial-scale=1.0">
+        <title>D3 Directed Graph</title>
+        <style>
+            body {
+                margin: 0;
+                padding: 0;
+                overflow: hidden;
+            }
+            #graph {
+                width: 100vw;
+                height: 100vh;
+                border: 1px solid black;
+            }
+        </style>
+    </head>
+    <body>
+        <div id="graph">Loading...</div>
+        <script type="module">
+			const treeData = ${JSON.stringify(treeData)};
+			const activeNode = ${activeNode};
+			const vscode = acquireVsCodeApi();
+            import * as d3 from 'https://cdn.jsdelivr.net/npm/d3@7/+esm';
+
+            // Load the external script and call createGraph function
+            const script = document.createElement('script');
+            script.type = 'module';
+            script.src = '${scriptUri}';
+            document.body.appendChild(script);
+
+            script.onload = () => {
+                import('${scriptUri}').then(module => {
+                    module.createGraph(treeData, vscode, activeNode);
+                });
+            };
+        </script>
+    </body>
+    </html>`;
+}
+class DebugViewProvider {
+    constructor(_extensionUri) {
+        this._extensionUri = _extensionUri;
+    }
+    resolveWebviewView(webviewView, context, _token) {
+        this._view = webviewView;
+        webviewView.webview.options = {
+            // Allow scripts in the webview
+            enableScripts: true,
+            localResourceRoots: [
+                this._extensionUri
+            ]
+        };
+        webviewView.webview.html = this._getHtmlForWebview(webviewView.webview);
+        webviewView.webview.onDidReceiveMessage(data => {
+            switch (data.type) {
+                case 'showGraph':
+                    {
+                        const treeData = data.treeData;
+                        const activeNode = data.activeNode;
+                        vscode__WEBPACK_IMPORTED_MODULE_0__.commands.executeCommand('extension.showD3Graph', treeData, activeNode);
+                        break;
+                    }
+            }
+        });
+    }
+    receiveInformation(command, data) {
+        var _a;
+        let info = { type: command, data: data };
+        (_a = this._view) === null || _a === void 0 ? void 0 : _a.webview.postMessage(info);
+    }
+    _getHtmlForWebview(webview) {
+        // Get the local path to main script run in the webview, then convert it to a uri we can use in the webview.
+        const scriptUri = webview.asWebviewUri(vscode__WEBPACK_IMPORTED_MODULE_0__.Uri.joinPath(this._extensionUri, 'media', 'main.js'));
+        const styleResetUri = webview.asWebviewUri(vscode__WEBPACK_IMPORTED_MODULE_0__.Uri.joinPath(this._extensionUri, 'media', 'reset.css'));
+        const styleVSCodeUri = webview.asWebviewUri(vscode__WEBPACK_IMPORTED_MODULE_0__.Uri.joinPath(this._extensionUri, 'media', 'vscode.css'));
+        const styleMainUri = webview.asWebviewUri(vscode__WEBPACK_IMPORTED_MODULE_0__.Uri.joinPath(this._extensionUri, 'media', 'main.css'));
+        // Use a nonce to only allow a specific script to be run.
+        const nonce = getNonce();
+        return `<!DOCTYPE html>
+			<html lang="en">
+			<head>
+				<meta charset="UTF-8">
+
+				<!--
+					Use a content security policy to only allow loading styles from our extension directory,
+					and only allow scripts that have a specific nonce.
+					(See the 'webview-sample' extension sample for img-src content security policy examples)
+				-->
+				<meta http-equiv="Content-Security-Policy" content="default-src 'none'; style-src ${webview.cspSource}; script-src 'nonce-${nonce}';">
+
+				<meta name="viewport" content="width=device-width, initial-scale=1.0">
+
+                <link href="${styleResetUri}" rel="stylesheet">
+				<link href="${styleVSCodeUri}" rel="stylesheet">
+				<link href="${styleMainUri}" rel="stylesheet">
+
+				<title>Debug</title>
+			</head>
+				<body>
+				<div class="new-bug">
+					<label for="new-bug">New Bug:</label>
+					<input type="text" id="new-bug" name="new-bug" />
+					<br/>
+					<button class="add-color-button">Start Session</button>
+				</div>
+				<br/>
+				<hr/>
+				<br/>
+				<div class="new-attempt">
+					<p>
+						<b>Bug</b>: No text rendering on page.
+					</p>
+					<br/>
+					<label for="new-attempt">Attempted Solution</label>
+					<textarea name="attempt" cols="40" rows="5">
+					</textarea>
+					<br/>
+					<button class="add-color-button">Add ?Checkpoint?</button>
+				</div>
+				<br/>
+				<hr/>
+				<br/>
+				<button class="show-tree-button">Show D3 Graph</button>
+				<br/>
+				<ul class="color-list">
+				</ul>
+				<br/>
+				<hr/>
+				<br/>
+				<p>
+				<b>Bug</b>: No text rendering on page.
+				</p>
+				<br/>
+				<div class="attempted-solution">
+					<label for="attempt">Attempted Solution</label>
+					<textarea name="attempt" cols="40" rows="5">Added print statements to the database call to check and see what data is being returned.?Should this be editable?
+					</textarea>
+				</div>
+				<br/>
+				<button class="meow-button">Restore ?Checkpoint?</button>
+				<button class="delete-checkpoint-button">?Delete?</button>
+	
+				<script nonce="${nonce}" src="${scriptUri}"></script>
+				<br/>
+				<br/>
+				</body>
+			</html>`;
+    }
+}
+DebugViewProvider.viewType = 'debugPanel.panelView';
+function getNonce() {
+    let text = '';
+    const possible = 'ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789';
+    for (let i = 0; i < 32; i++) {
+        text += possible.charAt(Math.floor(Math.random() * possible.length));
+    }
+    return text;
+}
+function deactivate() { }
+
+module.exports = __webpack_exports__;
+/******/ })()
+;
+//# sourceMappingURL=extension.js.map

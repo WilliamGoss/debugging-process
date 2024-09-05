@@ -19,7 +19,7 @@ export function createGraph(treeData, vscode, aNode) {
 
     // Define hierarchical data
     /*
-    const rootData = {
+    const data = {
         name: "Root",
         id: 0,
         children: [

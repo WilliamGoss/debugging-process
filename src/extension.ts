@@ -27,7 +27,7 @@ export function activate(context: vscode.ExtensionContext) {
 						case 'updateActiveNode':
 							provider.receiveInformation("activeNode", message.activeNode);
 							//This closes the webview, but might not want it
-							panel.dispose();
+							//panel.dispose();
 							break;
 					}
 				},
