@@ -3,7 +3,7 @@
   "displayName": "Debugging Process",
   "description": "Helps to understand debugging process",
   "publisher": "uiuc-goss",
-  "version": "0.0.1",
+  "version": "0.0.2",
   "engines": {
     "vscode": "^1.92.0"
   },
@@ -12,48 +12,48 @@
   ],
   "main": "./dist/extension.js",
   "activationEvents": [],
-"contributes": {
-  "views": {
-			"explorer": [
-				{
-					"type": "webview",
-					"id": "debugPanel.panelView",
-					"name": "Debugging"
-				}
-			]
-		},
+  "contributes": {
+    "views": {
+      "explorer": [
+        {
+          "type": "webview",
+          "id": "debugPanel.panelView",
+          "name": "Debugging"
+        }
+      ]
+    },
     "commands": [
-        {
-            "command": "extension.showD3Graph",
-            "title": "Show D3 Graph"
-        },
-        {
-          "command": "extension.updateD3Graph",
-          "title": "Update Graph"
-        },
-        {
-          "command": "extension.updateNodeText",
-          "title": "Update Node Text"
-        },
       {
-				"command": "debugPanel.addColor",
-				"category": "Debug Panel",
-				"title": "Add Color"
-			},
-			{
-				"command": "debugPanel.meow",
-				"category": "Debug Panel",
-				"title": "New Bug",
-				"icon": "$(bug)"
-			},
-			{
-				"command": "debugPanel.clearColors",
-				"category": "Debug Panel",
-				"title": "Checkpoint",
-				"icon": "$(debug-breakpoint-data)"
-			}
+        "command": "extension.showD3Graph",
+        "title": "Show D3 Graph"
+      },
+      {
+        "command": "extension.updateD3Graph",
+        "title": "Update Graph"
+      },
+      {
+        "command": "extension.updateNodeText",
+        "title": "Update Node Text"
+      },
+      {
+        "command": "debugPanel.addColor",
+        "category": "Debug Panel",
+        "title": "Add Color"
+      },
+      {
+        "command": "debugPanel.meow",
+        "category": "Debug Panel",
+        "title": "New Bug",
+        "icon": "$(bug)"
+      },
+      {
+        "command": "debugPanel.clearColors",
+        "category": "Debug Panel",
+        "title": "Checkpoint",
+        "icon": "$(debug-breakpoint-data)"
+      }
     ]
-},
+  },
   "scripts": {
     "vscode:prepublish": "npm run package",
     "compile": "webpack",
