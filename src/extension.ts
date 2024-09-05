@@ -22,12 +22,15 @@ export function activate(context: vscode.ExtensionContext) {
             panel.webview.html = getWebviewContent(panel.webview, context.extensionUri, treeData, activeNode);
 
 			panel.webview.onDidReceiveMessage(
-				message => {			
+				message => {		
 					switch (message.command) {
 						case 'updateActiveNode':
 							provider.receiveInformation("activeNode", message.activeNode);
 							//This closes the webview, but might not want it
 							//panel.dispose();
+							break;
+						case 'addNode':
+							provider.receiveInformation("addNode", message.nodeId);
 							break;
 					}
 				},

@@ -58,6 +58,11 @@ export function createGraph(treeData, vscode, aNode) {
         vscode.postMessage({ command: 'updateActiveNode', activeNode: nodeId});
     };
 
+    //new child helper function
+    function addNewChild(nodeId) {
+        vscode.postMessage({ command: 'addNode', nodeId: nodeId });
+    }
+
     // Convert hierarchical data to a tree
     const root = d3.hierarchy(data);
     const treeLayout = d3.tree().size([height - 200, width - 800]);
@@ -143,6 +148,7 @@ export function createGraph(treeData, vscode, aNode) {
         .style("display", "none"); // Initially hidden
         //.style("pointer-events", "all");
 
+    //Restore Button
     buttons.append('rect')
         .attr("x", d => (selectedNodeWidth(d) / 2) - buttonWidth) // Center the button horizontally within the expanded node
         .attr("y",  selectedNodeHeight - 15) // Position button at the bottom of the node with some padding
@@ -161,6 +167,26 @@ export function createGraph(treeData, vscode, aNode) {
         .attr("fill", "#fff")
         .text("Restore")
         .on("click", (event, d) => changeActiveNode(d.data.id));
+
+    //Add new child button
+    buttons.append('rect')
+    .attr("x", d => (selectedNodeWidth(d)) - (buttonWidth * 2) + 15)
+    .attr("y", selectedNodeHeight - 40) // Adjust the y-position for the new button
+    .attr("width", buttonWidth)
+    .attr("height", buttonHeight)
+    .attr("fill", "#28a745") // A different color for the "Add Node" button
+    .attr("stroke", "#218838")
+    .attr("stroke-width", 1)
+    .on("click", (event, d) => addNewChild(d.data.id)); // New command for adding a node
+
+buttons.append("text")
+    .attr("x", d => (selectedNodeWidth(d)) - (buttonWidth * 2) + 45)
+    .attr("y", selectedNodeHeight - 25) // Adjust the y-position for the new label
+    .attr("text-anchor", "middle")
+    .attr("font-size", "12px")
+    .attr("fill", "#fff")
+    .text("Add Node")
+    .on("click", (event, d) => addNewChild(d.data.id));
 
     // Function to handle node click
     function handleNodeClick(event, d) {
