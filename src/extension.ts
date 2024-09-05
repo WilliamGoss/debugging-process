@@ -1,5 +1,69 @@
 import * as vscode from 'vscode';
 
+let graphView: vscode.WebviewPanel | undefined = undefined;
+
+export function activate(context: vscode.ExtensionContext) {
+
+    const provider = new DebugViewProvider(context.extensionUri);
+
+    context.subscriptions.push(
+        vscode.window.registerWebviewViewProvider(DebugViewProvider.viewType, provider));
+
+    // Register the 'showD3Graph' command
+    context.subscriptions.push(
+        vscode.commands.registerCommand('extension.showD3Graph', (treeData = {}, activeNode = {}) => {
+            if (graphView) {
+                graphView.reveal(vscode.ViewColumn.One);
+                graphView.webview.postMessage({ command: 'updateGraph', treeData, activeNode });
+                return;
+            }
+
+            graphView = vscode.window.createWebviewPanel(
+                'd3Graph',
+                'D3 Graph',
+                vscode.ViewColumn.One,
+                {
+                    enableScripts: true
+                }
+            );
+
+            graphView.webview.html = getWebviewContent(graphView.webview, context.extensionUri, treeData, activeNode);
+
+            graphView.webview.onDidReceiveMessage(
+                message => {
+                    switch (message.command) {
+                        case 'updateActiveNode':
+                            provider.receiveInformation("activeNode", message.activeNode);
+                            break;
+                        case 'addNode':
+                            provider.receiveInformation("addNode", message.nodeId);
+                            break;
+                    }
+                },
+                undefined,
+                context.subscriptions
+            );
+
+            graphView.onDidDispose(() => {
+                graphView = undefined;
+            });
+        })
+    );
+
+    // Register the 'updateGraph' command
+    context.subscriptions.push(
+        vscode.commands.registerCommand('extension.updateGraph', (treeData = {}, activeNode = {}) => {
+            if (graphView) {
+                graphView.webview.postMessage({ command: 'updateGraph', treeData, activeNode });
+            } else {
+                vscode.window.showErrorMessage('No graph panel is currently open.');
+            }
+        })
+    );
+}
+
+/*
+
 export function activate(context: vscode.ExtensionContext) {
 
     const provider = new DebugViewProvider(context.extensionUri);
@@ -41,7 +105,21 @@ export function activate(context: vscode.ExtensionContext) {
         })
     );
 
+	context.subscriptions.push(
+        vscode.commands.registerCommand('extension.updateGraph', (treeData = {}, activeNode = {}) => {
+            // This assumes `panel` is defined in some scope or use appropriate method to access the panel
+            // Example of updating an existing webview panel or creating a new one
+            const panel = vscode.window.activeWebviewPanel; // Adjust as necessary
+
+            if (panel) {
+                panel.webview.postMessage({ command: 'updateGraph', treeData: treeData, activeNode: activeNode });
+            }
+        })
+    );
+
 }
+
+*/
 
 function getWebviewContent(webview: vscode.Webview, extensionUri: vscode.Uri, treeData: any, activeNode: any) {
     const scriptUri = webview.asWebviewUri(vscode.Uri.joinPath(extensionUri, 'media', 'graph.js'));
@@ -70,7 +148,7 @@ function getWebviewContent(webview: vscode.Webview, extensionUri: vscode.Uri, tr
         <script type="module">
 			const treeData = ${JSON.stringify(treeData)};
 			const activeNode = ${activeNode};
-			const vscode = acquireVsCodeApi();
+			
             import * as d3 from 'https://cdn.jsdelivr.net/npm/d3@7/+esm';
 
             // Load the external script and call createGraph function
@@ -81,7 +159,7 @@ function getWebviewContent(webview: vscode.Webview, extensionUri: vscode.Uri, tr
 
             script.onload = () => {
                 import('${scriptUri}').then(module => {
-                    module.createGraph(treeData, vscode, activeNode);
+                    module.createGraph(treeData, activeNode);
                 });
             };
         </script>
@@ -126,6 +204,13 @@ class DebugViewProvider implements vscode.WebviewViewProvider {
                         vscode.commands.executeCommand('extension.showD3Graph', treeData, activeNode);
                         break;
                     }
+				case 'updateGraph':
+					{
+						const treeData = data.treeData;
+						const activeNode = data.activeNode;
+						vscode.commands.executeCommand('extension.updateGraph', treeData, activeNode);
+						break;
+					}
 			}
 		});
 	}

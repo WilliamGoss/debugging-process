@@ -100,6 +100,8 @@
                     nodes[message.data].children.push(nodeCount);
                     nodeCount = nodeCount + 1;
                     vscode.setState({root: root, nodeCount: nodeCount, activeNode: activeNode, nodes: nodes});
+                    let newTree = generateTree(nodes);
+                    vscode.postMessage({ type: 'updateGraph', command: "showD3Graph", treeData: newTree, activeNode: activeNode });
                     break;
                 }
         }

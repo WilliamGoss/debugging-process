@@ -1,8 +1,9 @@
 import * as d3 from 'https://cdn.jsdelivr.net/npm/d3@7/+esm';
 
-export function createGraph(treeData, vscode, aNode) {
+export function createGraph(treeData, aNode, nCount) {
     let data = treeData;
     let activeNode = aNode;
+    let nodeCount = nCount;
 
     const width = window.innerWidth;
     const height = window.innerHeight;
@@ -106,6 +107,7 @@ export function createGraph(treeData, vscode, aNode) {
         .data(root.descendants())
         .enter().append('g')
         .attr('class', 'node')
+        .attr('data-id', d => d.data.id)
         .attr("transform", d => `translate(${d.x}, ${d.y})`);
 
     const rects = nodeGroup.append('rect')
@@ -294,3 +296,19 @@ buttons.append("text")
 
     svg.call(zoom);
 }
+
+const vscode = acquireVsCodeApi();
+
+function updateGraph(newTree, updatedActiveNode) {
+    d3.select('svg').remove();
+    createGraph(newTree, updatedActiveNode);
+}
+
+window.addEventListener('message', event => {
+    const message = event.data;
+    if (message.command === 'updateGraph') {
+        let updatedActiveNode = message.activeNode;
+        let newTree = message.treeData;
+        updateGraph(newTree, updatedActiveNode);
+    }
+});
