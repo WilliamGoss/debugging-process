@@ -27,6 +27,10 @@
             "command": "extension.showD3Graph",
             "title": "Show D3 Graph"
         },
+        {
+          "command": "extension.updateD3Graph",
+          "title": "Update Graph"
+        },
       {
 				"command": "debugPanel.addColor",
 				"category": "Debug Panel",
