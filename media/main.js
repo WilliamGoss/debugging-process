@@ -5,13 +5,25 @@
     const vscode = acquireVsCodeApi();
 
     //get node tree state
+    let nodes;
+    let nodeCount;
+    let activeNode;
+    let root;
     const oldState = vscode.getState() || { nodesData: {root: 0, nodeCount: 0, activeNode: 0, nodes: {}} };
-    console.log(oldState);
+    if ("nodes" in oldState) {
+        nodes = oldState.nodes;
+        nodeCount = oldState.nodeCount;
+        activeNode = oldState.activeNode;
+        root = oldState.root;
+    } else {
+        //stale data
+        vscode.setState({root: -1, nodeCount: nodeCount, activeNode: activeNode, nodes: {}});
+        nodes = [];
+        nodeCount = 0;
+        activeNode = 0;
+        root = -1;
+    }
     //const oldState = { treeData: {}, nodeCount: 0, activeNode: 0 };
-    let nodes = oldState.nodes;
-    let nodeCount = oldState.nodeCount;
-    let activeNode = oldState.activeNode;
-    let root = oldState.root;
 
     let viewId = '';
     
