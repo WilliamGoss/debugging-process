@@ -119,13 +119,17 @@
         }
     });
 
-    function createNewIssue() {
+    async function createNewIssue() {
         const textAreaObject = document.querySelector('#view1 textarea');
         const userIssueText = textAreaObject.value;
         let newNodes = {};
         newNodes[0] = {name: userIssueText, id: 0, children: []};
         nodeCount = nodeCount + 1;
-        vscode.setState({root: 0, nodeCount: nodeCount, activeNode: 0, nodes: newNodes});
+        //update the local global variables: nodes, activeNode, root
+        nodes = newNodes;
+        activeNode = 0;
+        root = 0;
+        await vscode.setState({root: 0, nodeCount: nodeCount, activeNode: 0, nodes: newNodes});
         textAreaObject.value = '';
         updateExplorationText();
     }
@@ -136,6 +140,7 @@
         activeNode = 0;
         vscode.setState({root: -1, nodeCount: nodeCount, activeNode: activeNode, nodes: {}});
         showView([]);
+        localStorage.clear();
     }
 
     function showTree(nodes) {
@@ -165,6 +170,7 @@
 
     //creates the tree data for the graph
     function generateTree(nodes) {
+        console.log(nodes);
         function buildNode(nodeId) {
             const node = nodes[nodeId];
             return {
