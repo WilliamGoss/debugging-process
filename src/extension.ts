@@ -23,7 +23,9 @@ export function activate(context: vscode.ExtensionContext) {
                 'D3 Graph',
                 vscode.ViewColumn.One,
                 {
-                    enableScripts: true
+                    enableScripts: true,
+					//retainContextWhenHidden supposedly can be resource hungry
+					retainContextWhenHidden: true
                 }
             );
 
