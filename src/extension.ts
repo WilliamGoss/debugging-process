@@ -315,6 +315,7 @@ class DebugViewProvider implements vscode.WebviewViewProvider {
 					}
 				case 'createCommit':
 					{
+						await saveAllFiles();
 						const activeNode = data.activeNode;
 						//git repo fileLoc
 						const gitLoc = this._globalStorage.path;
@@ -497,5 +498,17 @@ async function restoreToCommit({ fs, workspaceFolder, dir, commitHash }: {fs: an
 	  }
 }
 
+//helper function to save all dirty files
+async function saveAllFiles() {
+	const openEditors = vscode.window.visibleTextEditors;
+	const savePromises = openEditors.map(editor => {
+		if (editor.document.isDirty) {
+			return editor.document.save();
+		}
+		return Promise.resolve();
+	});
+
+	return Promise.all(savePromises);
+}
 
 export function deactivate() {}
