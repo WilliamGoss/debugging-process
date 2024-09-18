@@ -45,7 +45,7 @@
 			<label for="new-exploration">Actions Taken</label>
 			<textarea id="explorationText" name="exploration" cols="40" rows="5"></textarea>
             <br/>
-			<button id="saveExploration">Save Exploration</button>
+			<button id="saveExploration" disabled>Save Exploration</button>
             <br/>
             <br/>
             <hr/>
@@ -70,7 +70,7 @@
     /* Overall View */
     // @ts-ignore: Object is possibly 'null'.
     document.getElementById('showTreeButton').addEventListener('click', () => showTree(nodes));
-    document.getElementById('saveExploration').addEventListener('click', () => createCommit());
+    document.getElementById('saveExploration').addEventListener('click', () => createCommit()); 
     //update node text
     document.getElementById('explorationText').addEventListener('input', (event) => updateText(event));
 
@@ -171,6 +171,7 @@
                 // @ts-ignore
                 textarea.value = node.name || ''; // Set the name or empty if not available
             }
+            checkChildCommits(node);       
         }
     }
 
@@ -198,6 +199,29 @@
     //save is clicked, so a commit should be saved on the node
     function createCommit() {
         vscode.postMessage({ type: 'createCommit', command: "showD3Graph", activeNode: activeNode });
+    }
+
+    //check if any children have commits
+    function checkChildCommits(node) {
+        let childList = node.children;
+        let check = false;
+        for (const child of childList) {
+            if (nodes[child].commitId !== "") {
+                //a child has a commit, so disable saving on the parent
+                const saveExplorationButton = document.getElementById('saveExploration');
+                if (saveExplorationButton) {
+                    saveExplorationButton.disabled = true;
+                    check = true;
+                    break;
+                }
+            }
+        }
+        if (!check) {
+            const saveExplorationButton = document.getElementById('saveExploration');
+            if (saveExplorationButton) {
+                saveExplorationButton.disabled = false;
+            }
+        }
     }
 
 }());
