@@ -53,3 +53,10 @@ body {
 .visible {
     display: block;
 }
+
+button:disabled {
+    background-color: #d3d3d3; /* Light grey color */
+    color: #a9a9a9; /* Darker grey for text */
+    cursor: not-allowed; /* Change cursor to indicate it's not clickable */
+    border: 1px solid #a9a9a9; /* Optional: grey border */
+}
