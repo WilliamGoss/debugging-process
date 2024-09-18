@@ -1,10 +1,17 @@
 import * as vscode from 'vscode';
+import * as git from "isomorphic-git";
+import fs from 'fs';
+import * as path from 'path';
 
 let graphView: vscode.WebviewPanel | undefined = undefined;
 
-export function activate(context: vscode.ExtensionContext) {
+const workspaceFolder = vscode.workspace.workspaceFolders ? vscode.workspace.workspaceFolders[0].uri.fsPath : null;
 
-    const provider = new DebugViewProvider(context.extensionUri);
+export async function activate(context: vscode.ExtensionContext) {
+
+	const globalFolder = context.globalStorageUri.path;
+
+    const provider = new DebugViewProvider(context.extensionUri, context.globalStorageUri);
 
     context.subscriptions.push(
         vscode.window.registerWebviewViewProvider(DebugViewProvider.viewType, provider));
@@ -35,6 +42,17 @@ export function activate(context: vscode.ExtensionContext) {
                 message => {
                     switch (message.command) {
                         case 'updateActiveNode':
+							const dir = globalFolder;
+							const commitHash = message.commitId;
+							if (commitHash.length === 0) {
+								//new child was added and restored to become selected
+								//console.log("do nothing");
+							} else {
+								//restore the commit
+								if (workspaceFolder !== null) {
+									restoreToCommit({ fs, workspaceFolder, dir, commitHash});
+								}
+							}
                             provider.receiveInformation("activeNode", message.activeNode);
                             break;
                         case 'addNode':
@@ -58,7 +76,7 @@ export function activate(context: vscode.ExtensionContext) {
             if (graphView) {
                 graphView.webview.postMessage({ command: 'updateGraph', treeData, activeNode });
             } else {
-                vscode.window.showErrorMessage('No graph panel is currently open.');
+                //vscode.window.showErrorMessage('No graph panel is currently open.');
             }
         })
     );
@@ -69,7 +87,19 @@ export function activate(context: vscode.ExtensionContext) {
             if (graphView) {
                 graphView.webview.postMessage({ command: 'updateNodeText', nodeId, newText });
             } else {
-                vscode.window.showErrorMessage('No graph panel is currently open.');
+                //vscode.window.showErrorMessage('No graph panel is currently open.');
+            }
+        })
+    );
+
+	// Register the 'attachCommit' command
+	context.subscriptions.push(
+        vscode.commands.registerCommand('extension.attachCommit', (nodeId: number, commitId: string) => {
+			provider.receiveInformation("attachCommit", {nodeId: nodeId, commitId: commitId});
+            if (graphView) {
+                graphView.webview.postMessage({ command: 'attachCommit', nodeId, commitId });
+            } else {
+                //vscode.window.showErrorMessage('No graph panel is currently open.');
             }
         })
     );
@@ -180,6 +210,9 @@ function getWebviewContent(webview: vscode.Webview, extensionUri: vscode.Uri, tr
     </html>`;
 }
 
+//for removing the git
+const { exec } = require('child_process');
+
 class DebugViewProvider implements vscode.WebviewViewProvider {
 
 	public static readonly viewType = 'debugPanel.panelView';
@@ -188,9 +221,10 @@ class DebugViewProvider implements vscode.WebviewViewProvider {
 
 	constructor(
 		private readonly _extensionUri: vscode.Uri,
+		private readonly _globalStorage: vscode.Uri
 	) { }
 
-	public resolveWebviewView(
+	public async resolveWebviewView(
 		webviewView: vscode.WebviewView,
 		context: vscode.WebviewViewResolveContext,
 		_token: vscode.CancellationToken,
@@ -208,7 +242,7 @@ class DebugViewProvider implements vscode.WebviewViewProvider {
 
 		webviewView.webview.html = this._getHtmlForWebview(webviewView.webview);
 
-		webviewView.webview.onDidReceiveMessage(data => {
+		webviewView.webview.onDidReceiveMessage(async data => {
 			switch (data.type) {
                 case 'showGraph':
                     {
@@ -229,6 +263,88 @@ class DebugViewProvider implements vscode.WebviewViewProvider {
 						const activeNode = data.activeNode;
 						const newText = data.newText;
 						vscode.commands.executeCommand('extension.updateNodeText', activeNode, newText);
+						break;
+					}
+				case 'initializeRepo':
+					{
+						try {
+							//git repo fileLoc
+							const gitLoc = this._globalStorage.path;
+
+							//get all files and add them via git
+							if (workspaceFolder !== null) {
+								//create the git repo
+								await git.init({ fs, dir: workspaceFolder, gitdir: gitLoc });
+
+								const files = await listFiles(workspaceFolder);
+								for (const file of files) {
+									const relativeFilePath = path.relative(workspaceFolder, file);
+									await git.add({
+										fs,
+										dir: workspaceFolder,
+										gitdir: gitLoc,
+										filepath: relativeFilePath
+									}).catch(error => {
+										console.error(`Error adding file: ${error.message}`);
+									});
+								}
+							}
+
+							//create the initial commit
+							await git.commit({
+								fs,
+								gitdir: gitLoc,
+								author: { name: 'Debug Extension', email: 'debug@extension.com' },
+								message: 'Initial Repo Created'
+							});
+
+							const log = await git.log({ fs, gitdir: gitLoc });
+							//0 for the root node, but could change eventually if we allow multiple roots (issues)
+							vscode.commands.executeCommand('extension.attachCommit', 0, log[0].oid);
+
+						} catch (error) {
+							console.error(error);
+						}
+						break;
+					}
+				case 'removeRepo':
+					{
+						let directoryPath = this._globalStorage.path + '*';
+						exec(`rm -rf ${directoryPath}`);
+						break;
+					}
+				case 'createCommit':
+					{
+						const activeNode = data.activeNode;
+						//git repo fileLoc
+						const gitLoc = this._globalStorage.path;
+
+						//get all files and add them via git
+						if (workspaceFolder !== null) {
+							const files = await listFiles(workspaceFolder);
+							for (const file of files) {
+								const relativeFilePath = path.relative(workspaceFolder, file);
+								await git.add({
+									fs,
+									dir: workspaceFolder,
+									gitdir: gitLoc,
+									filepath: relativeFilePath
+								});
+							}
+						}
+
+						//create the commit
+						const commitMessage = 'Updating node with ID ' + activeNode;
+						await git.commit({
+							fs,
+							gitdir: gitLoc,
+							author: { name: 'Debug Extension', email: 'debug@extension.com' },
+							message: commitMessage
+						});
+
+						const log = await git.log({ fs, gitdir: gitLoc });
+						//0 for the root node, but could change eventually if we allow multiple roots (issues)
+						vscode.commands.executeCommand('extension.attachCommit', activeNode, log[0].oid);
 					}
 			}
 		});
@@ -331,6 +447,55 @@ function getNonce() {
 	return text;
 }
 
+//helper function get all files for the initial commit
+type FileList = string[];
+async function listFiles(dirPath: string): Promise<FileList> {
+	const files: FileList = [];
+	
+	async function readDir(currentPath: string): Promise<void> {
+	  const entries = await fs.promises.readdir(currentPath, { withFileTypes: true });
+	  for (const entry of entries) {
+		const fullPath = path.join(currentPath, entry.name);
+		if (entry.isDirectory()) {
+		  await readDir(fullPath);
+		} else {
+		  files.push(fullPath);
+		}
+	  }
+	}
+  
+	await readDir(dirPath);
+	return files;
+  }
+
+async function restoreToCommit({ fs, workspaceFolder, dir, commitHash }: {fs: any, workspaceFolder: string, dir: string, commitHash: string}) {
+	try {
+		// Checkout the specific commit
+		await git.checkout({
+		  fs,
+		  dir: workspaceFolder,
+		  gitdir: dir,        // Directory where the .git folder is located (repository location)
+		  ref: commitHash,
+		  force: true, // Force checkout to override any working directory changes
+		});
+
+		if (workspaceFolder !== null) {
+			const folderUri = vscode.Uri.file(workspaceFolder);
+  
+			// Iterate over the files in the directory and reopen them to ensure the editor reflects the changes
+			const files = await vscode.workspace.findFiles(new vscode.RelativePattern(folderUri, '**/*'));
+
+			for (const fileUri of files) {
+				const doc = await vscode.workspace.openTextDocument(fileUri); // Open the file document
+				await vscode.window.showTextDocument(doc, { preview: false }); // Re-show the document
+			}
+
+			//console.log('Workspace files refreshed');
+		}
+	  } catch (err) {
+		console.error('Error during restore:', err);
+	  }
+}
 
 
 export function deactivate() {}

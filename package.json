@@ -32,6 +32,10 @@
         "title": "Update Graph"
       },
       {
+        "command": "extension.attachCommit",
+        "title": "Attach Commit"
+      },
+      {
         "command": "extension.updateNodeText",
         "title": "Update Node Text"
       },
@@ -82,7 +86,9 @@
     "webpack-cli": "^5.1.4"
   },
   "dependencies": {
+    "@isomorphic-git/lightning-fs": "^4.6.0",
     "d3": "^7.9.0",
-    "dagre-d3": "^0.6.4"
+    "dagre-d3": "^0.6.4",
+    "isomorphic-git": "^1.27.1"
   }
 }

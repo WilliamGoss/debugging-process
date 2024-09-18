@@ -70,7 +70,7 @@
     /* Overall View */
     // @ts-ignore: Object is possibly 'null'.
     document.getElementById('showTreeButton').addEventListener('click', () => showTree(nodes));
-    document.getElementById('saveExploration').addEventListener('click', () => updateNodeText());
+    document.getElementById('saveExploration').addEventListener('click', () => createCommit());
     //update node text
     document.getElementById('explorationText').addEventListener('input', (event) => updateText(event));
 
@@ -107,7 +107,7 @@
                 }
             case 'addNode':
                 {
-                    let newNode = {name: "New Node", id: nodeCount, children: []};
+                    let newNode = {name: "New Node", id: nodeCount, commitId: "", children: []};
                     nodes[nodeCount] = newNode;
                     nodes[message.data].children.push(nodeCount);
                     nodeCount = nodeCount + 1;
@@ -116,22 +116,33 @@
                     vscode.postMessage({ type: 'updateGraph', command: "showD3Graph", treeData: newTree, activeNode: activeNode });
                     break;
                 }
+            case 'attachCommit':
+                {
+                    const nodeToUpdate = message.data.nodeId;
+                    const commitId = message.data.commitId;
+                    nodes[nodeToUpdate].commitId = commitId;
+                    vscode.setState({root: root, nodeCount: nodeCount, activeNode: activeNode, nodes: nodes});
+                    let newTree = generateTree(nodes);
+                    vscode.postMessage({ type: 'updateGraph', command: "showD3Graph", treeData: newTree, activeNode: activeNode });
+                    break;
+                }
         }
     });
 
-    async function createNewIssue() {
+    function createNewIssue() {
         const textAreaObject = document.querySelector('#view1 textarea');
         const userIssueText = textAreaObject.value;
         let newNodes = {};
-        newNodes[0] = {name: userIssueText, id: 0, children: []};
+        newNodes[0] = {name: userIssueText, id: 0, commitId: "", children: []};
         nodeCount = nodeCount + 1;
         //update the local global variables: nodes, activeNode, root
         nodes = newNodes;
         activeNode = 0;
         root = 0;
-        await vscode.setState({root: 0, nodeCount: nodeCount, activeNode: 0, nodes: newNodes});
+        vscode.setState({root: 0, nodeCount: nodeCount, activeNode: 0, nodes: newNodes});
         textAreaObject.value = '';
         updateExplorationText();
+        vscode.postMessage({ type: 'initializeRepo' });
     }
 
     /* For testing only! */
@@ -141,6 +152,7 @@
         vscode.setState({root: -1, nodeCount: nodeCount, activeNode: activeNode, nodes: {}});
         showView([]);
         localStorage.clear();
+        vscode.postMessage({ type: 'removeRepo' });
     }
 
     function showTree(nodes) {
@@ -170,17 +182,22 @@
 
     //creates the tree data for the graph
     function generateTree(nodes) {
-        console.log(nodes);
         function buildNode(nodeId) {
             const node = nodes[nodeId];
             return {
                 name: node.name,
                 id: node.id,
+                commitId: node.commitId,
                 children: node.children.map(childId => buildNode(childId))
             };
         }
 
         return buildNode(root);
+    }
+
+    //save is clicked, so a commit should be saved on the node
+    function createCommit() {
+        vscode.postMessage({ type: 'createCommit', command: "showD3Graph", activeNode: activeNode });
     }
 
 }());

@@ -53,10 +53,10 @@ export function createGraph(treeData, aNode, nCount) {
     */
 
     //active node helper function
-    function changeActiveNode(nodeId) {
+    function changeActiveNode(nodeId, commitId) {
         activeNode = nodeId; 
         updateActiveNode(nodeId); 
-        vscode.postMessage({ command: 'updateActiveNode', activeNode: nodeId});
+        vscode.postMessage({ command: 'updateActiveNode', activeNode: nodeId, commitId: commitId});
     };
 
     //new child helper function
@@ -159,7 +159,7 @@ export function createGraph(treeData, aNode, nCount) {
         .attr("fill", "#007bff") // Button color
         .attr("stroke", "#0056b3")
         .attr("stroke-width", 1)
-        .on("click", (event, d) => changeActiveNode(d.data.id)); // Example button restore
+        .on("click", (event, d) => changeActiveNode(d.data.id, d.data.commitId)); // Example button restore
 
     buttons.append('text')
         .attr("x", d => (selectedNodeWidth(d) - buttonWidth) / 2) // Center text within button
@@ -168,7 +168,7 @@ export function createGraph(treeData, aNode, nCount) {
         .attr("font-size", "12px")
         .attr("fill", "#fff")
         .text("Restore")
-        .on("click", (event, d) => changeActiveNode(d.data.id));
+        .on("click", (event, d) => changeActiveNode(d.data.id, d.data.commitId));
 
     //Add new child button
     buttons.append('rect')
@@ -312,6 +312,8 @@ window.addEventListener('message', event => {
         updateGraph(newTree, updatedActiveNode);
     } else if (message.command === 'updateNodeText') {
         updateNodeText(message.nodeId, message.newText);
+    } else if (message.command === 'attachCommit') {
+        //updateCommitId(message.nodeId, message.commitId);
     }
 });
 
@@ -331,3 +333,19 @@ function updateNodeText(nodeId, newText) {
     nodeGroup.select('text.info') // Selects the text with class 'info'
         .text(newText); // Update with full new text
 }
+
+/* maybe not needed
+function updateCommitId(nodeId, commitId) {
+    const nodeGroup = d3.select(`g.node[data-id="${nodeId}"]`);
+
+    if (nodeGroup.empty()) {
+        console.error(`Node with ID ${nodeId} not found`);
+        return;
+    }
+
+    //update the commit
+    console.log("Node ID: ", nodeId);
+    console.log("Commit ID: ", commitId);
+
+}
+    */
