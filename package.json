@@ -5,7 +5,7 @@
   "publisher": "uiuc-goss",
   "version": "0.0.5",
   "engines": {
-    "vscode": "^1.92.0"
+    "vscode": "^1.93.0"
   },
   "categories": [
     "Other"
@@ -74,7 +74,7 @@
     "@types/dagre-d3": "^0.6.6",
     "@types/mocha": "^10.0.7",
     "@types/node": "20.x",
-    "@types/vscode": "^1.92.0",
+    "@types/vscode": "^1.93.0",
     "@typescript-eslint/eslint-plugin": "^7.14.1",
     "@typescript-eslint/parser": "^7.11.0",
     "@vscode/test-cli": "^0.0.9",

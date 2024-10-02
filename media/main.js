@@ -45,7 +45,9 @@
 			<label for="new-exploration">Actions Taken</label>
 			<textarea id="explorationText" name="exploration" cols="40" rows="5"></textarea>
             <br/>
+            <!--
 			<button id="saveExploration" disabled>Save Exploration</button>
+            -->
             <br/>
             <br/>
             <hr/>
@@ -70,7 +72,7 @@
     /* Overall View */
     // @ts-ignore: Object is possibly 'null'.
     document.getElementById('showTreeButton').addEventListener('click', () => showTree(nodes));
-    document.getElementById('saveExploration').addEventListener('click', () => createCommit()); 
+    //document.getElementById('saveExploration').addEventListener('click', () => createCommit()); 
     //update node text
     document.getElementById('explorationText').addEventListener('input', (event) => updateText(event));
 
@@ -126,6 +128,21 @@
                     vscode.postMessage({ type: 'updateGraph', command: "showD3Graph", treeData: newTree, activeNode: activeNode });
                     break;
                 }
+            case 'autoCreateNode':
+                {
+                    console.log('active node is: ' + activeNode);
+                    let newNode = {name: message.data, id: nodeCount, commitId: "", children: []};
+                    //change active node to the new node
+                    let newActiveNode = nodeCount;
+                    nodes[nodeCount] = newNode;
+                    nodes[activeNode].children.push(nodeCount);
+                    nodeCount = nodeCount + 1;
+                    activeNode = newActiveNode;
+                    vscode.setState({root: root, nodeCount: nodeCount, activeNode: newActiveNode, nodes: nodes});
+                    let newTree = generateTree(nodes);
+                    vscode.postMessage({ type: 'updateGraph', command: "showD3Graph", treeData: newTree, activeNode: newActiveNode });
+                    break;
+                }
         }
     });
 
@@ -171,7 +188,7 @@
                 // @ts-ignore
                 textarea.value = node.name || ''; // Set the name or empty if not available
             }
-            checkChildCommits(node);       
+            //checkChildCommits(node);       
         }
     }
 

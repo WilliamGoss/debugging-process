@@ -169,7 +169,7 @@ export function createGraph(treeData, aNode, nCount) {
         .attr("fill", "#fff")
         .text("Restore")
         .on("click", (event, d) => changeActiveNode(d.data.id, d.data.commitId));
-
+/* 
     //Add new child button
     buttons.append('rect')
     .attr("x", d => (selectedNodeWidth(d)) - (buttonWidth * 2) + 15)
@@ -189,6 +189,7 @@ buttons.append("text")
     .attr("fill", "#fff")
     .text("Add Node")
     .on("click", (event, d) => addNewChild(d.data.id));
+*/
 
     // Function to handle node click
     function handleNodeClick(event, d) {

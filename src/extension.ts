@@ -9,12 +9,52 @@ const workspaceFolder = vscode.workspace.workspaceFolders ? vscode.workspace.wor
 
 export async function activate(context: vscode.ExtensionContext) {
 
+	const watcher = vscode.workspace.createFileSystemWatcher('**/*.py');
+
 	const globalFolder = context.globalStorageUri.path;
 
     const provider = new DebugViewProvider(context.extensionUri, context.globalStorageUri);
 
+	let fileChanged = false;
+	let pythonExecuted = false;
+
     context.subscriptions.push(
         vscode.window.registerWebviewViewProvider(DebugViewProvider.viewType, provider));
+
+	// detect changes to files
+	watcher.onDidChange((uri) => {
+		fileChanged = true;
+	});
+
+	// get terminal execution and check if python was run
+	context.subscriptions.push(vscode.window.onDidStartTerminalShellExecution((event) => {
+		if (event.execution.commandLine.value.includes('python')) {
+			pythonExecuted = true;
+		}
+	}));
+
+	// Check for file changes and Python execution
+    setInterval(() => {
+        if (fileChanged && pythonExecuted) {
+            provider.receiveInformation("autoCreateNode", `File changed`);
+            fileChanged = false;
+            pythonExecuted = false;
+        }
+    }, 1000); // Check every second
+
+	/*
+	// Detect Python execution
+    function detectPythonExecution(terminal: vscode.Terminal) {
+        if (terminal.name.includes("Python") || terminal.name.includes("Run Python")) {
+            if (fileChanged) {
+				console.log('create new node');
+				provider.receiveInformation("autoCreateNode", 'Changes made to files');
+				fileChanged = false;
+			}
+        }
+    }
+		*/
+
 
     // Register the 'showD3Graph' command
     context.subscriptions.push(
@@ -54,6 +94,7 @@ export async function activate(context: vscode.ExtensionContext) {
 								}
 							}
                             provider.receiveInformation("activeNode", message.activeNode);
+							fileChanged = false;
                             break;
                         case 'addNode':
                             provider.receiveInformation("addNode", message.nodeId);
