@@ -73,7 +73,7 @@
                 <p> Initial Node: </p> <p id="firstNode">None</p>
                 <br/>
                 <br/>
-                <button id="clearStatus">Clear Status/button>
+                <button id="clearStatus">Clear Status</button>
             </div>
         </div>
     `;
@@ -156,6 +156,7 @@
                     let newTree = generateTree(nodes);
                     vscode.postMessage({ type: 'updateGraph', command: "showD3Graph", treeData: newTree, activeNode: newActiveNode });
                     /* debug stuff */
+                    document.getElementById('htmlCount').innerHTML = nodeCount;
                     document.getElementById('fileChanged').style.background = 'DodgerBlue';
                     document.getElementById('pyRun').style.background = 'DodgerBlue';
                     break;
