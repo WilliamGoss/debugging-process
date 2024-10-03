@@ -61,6 +61,20 @@
             <br/>
             <button id="clearState">Clear State</button>
             <br/>
+            <br/>
+            <div>
+                <button id="fileChanged"></button><p> File Changed</p>
+                <br/>
+                <button id="pyRun"></button>
+                <p>    </p> <p> Python Ran</p>
+                <br/>
+                <p> Nodes in state: </p><p id="htmlCount">0</p>
+                <br/>
+                <p> Initial Node: </p> <p id="firstNode">None</p>
+                <br/>
+                <br/>
+                <button id="clearStatus">Clear Status/button>
+            </div>
         </div>
     `;
 
@@ -78,6 +92,7 @@
 
     /* TESTING ONLY */
     document.getElementById('clearState')?.addEventListener('click', () => emptyState());
+    document.getElementById('clearStatus')?.addEventListener('click', () => resetStatus());
 
     showView(nodes);
 
@@ -130,7 +145,6 @@
                 }
             case 'autoCreateNode':
                 {
-                    console.log('active node is: ' + activeNode);
                     let newNode = {name: message.data, id: nodeCount, commitId: "", children: []};
                     //change active node to the new node
                     let newActiveNode = nodeCount;
@@ -141,6 +155,19 @@
                     vscode.setState({root: root, nodeCount: nodeCount, activeNode: newActiveNode, nodes: nodes});
                     let newTree = generateTree(nodes);
                     vscode.postMessage({ type: 'updateGraph', command: "showD3Graph", treeData: newTree, activeNode: newActiveNode });
+                    /* debug stuff */
+                    document.getElementById('fileChanged').style.background = 'DodgerBlue';
+                    document.getElementById('pyRun').style.background = 'DodgerBlue';
+                    break;
+                }
+            case 'fileChanged':
+                {
+                    document.getElementById('fileChanged').style.background = 'MediumSeaGreen';
+                    break;
+                }
+            case 'pythonRan':
+                {
+                    document.getElementById('pyRun').style.background = 'MediumSeaGreen';
                     break;
                 }
         }
@@ -172,6 +199,12 @@
         vscode.postMessage({ type: 'removeRepo' });
     }
 
+    /* Testing */
+    function resetStatus() {
+        document.getElementById('fileChanged').style.background = 'DodgerBlue';
+        document.getElementById('pyRun').style.background = 'DodgerBlue';
+    }
+
     function showTree(nodes) {
         let treeData = generateTree(nodes);
         vscode.postMessage({ type: 'showGraph', command: "showD3Graph", treeData: treeData, activeNode: activeNode });
@@ -188,7 +221,10 @@
                 // @ts-ignore
                 textarea.value = node.name || ''; // Set the name or empty if not available
             }
-            //checkChildCommits(node);       
+            //checkChildCommits(node); 
+            //debug stuff
+            document.getElementById('htmlCount').innerHTML = nodeCount;
+            document.getElementById('firstNode').innerHTML = nodes[0].name;      
         }
     }
 

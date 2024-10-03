@@ -24,17 +24,23 @@ export async function activate(context: vscode.ExtensionContext) {
 	// detect changes to files
 	watcher.onDidChange((uri) => {
 		fileChanged = true;
+		provider.receiveInformation("fileChanged", "");
 	});
 
 	// get terminal execution and check if python was run
 	context.subscriptions.push(vscode.window.onDidStartTerminalShellExecution((event) => {
 		if (event.execution.commandLine.value.includes('python')) {
 			pythonExecuted = true;
+			provider.receiveInformation("pythonRan", "");
 		}
 	}));
 
 	// Check for file changes and Python execution
     setInterval(() => {
+		//code was run before a file was ever changed
+		if (pythonExecuted && !fileChanged) {
+			pythonExecuted = false;
+		}
         if (fileChanged && pythonExecuted) {
             provider.receiveInformation("autoCreateNode", `File changed`);
             fileChanged = false;
