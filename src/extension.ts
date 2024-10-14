@@ -571,19 +571,18 @@ async function restoreToCommit({ fs, workspaceFolder, dir, commitHash, branchId 
 		  force: true, // Force checkout to override any working directory changes
 		});
 
-		if (workspaceFolder !== null) {
-			const folderUri = vscode.Uri.file(workspaceFolder);
+		//if (workspaceFolder !== null) {
+			//const folderUri = vscode.Uri.file(workspaceFolder);
   
 			// Iterate over the files in the directory and reopen them to ensure the editor reflects the changes
-			const files = await vscode.workspace.findFiles(new vscode.RelativePattern(folderUri, '**/*'));
-
-			for (const fileUri of files) {
-				const doc = await vscode.workspace.openTextDocument(fileUri); // Open the file document
-				await vscode.window.showTextDocument(doc, { preview: false }); // Re-show the document
-			}
+			//const files = await vscode.workspace.findFiles(new vscode.RelativePattern(folderUri, '**/*'));
+			//for (const fileUri of files) {
+				//const doc = await vscode.workspace.openTextDocument(fileUri); // Open the file document
+				//await vscode.window.showTextDocument(doc, { preview: false }); // Re-show the document
+			//}
 
 			//console.log('Workspace files refreshed');
-		}
+		//}
 	  } catch (err) {
 		console.error('Error during restore:', err);
 	  }
