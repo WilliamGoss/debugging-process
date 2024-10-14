@@ -558,7 +558,8 @@ async function restoreToCommit({ fs, workspaceFolder, dir, commitHash, branchId 
 			fs,
 			dir: workspaceFolder,
 			gitdir: dir,
-			ref: branchId
+			ref: branchId,
+			force: true
 		});
 
 		// Checkout the specific commit
