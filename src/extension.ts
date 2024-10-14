@@ -90,18 +90,20 @@ export async function activate(context: vscode.ExtensionContext) {
                         case 'updateActiveNode':
 							const dir = globalFolder;
 							const commitHash = message.commitId;
+							const branchId = message.branchId;
 							if (commitHash.length === 0) {
 								//new child was added and restored to become selected
 								//console.log("do nothing");
 							} else {
 								//restore the commit
 								if (workspaceFolder !== null) {
-									restoreToCommit({ fs, workspaceFolder, dir, commitHash});
+									restoreToCommit({ fs, workspaceFolder, dir, commitHash, branchId});
 								}
 							}
                             provider.receiveInformation("activeNode", message.activeNode);
 							fileChanged = false;
                             break;
+						//addNode might be deprecated
                         case 'addNode':
                             provider.receiveInformation("addNode", message.nodeId);
                             break;
@@ -141,10 +143,10 @@ export async function activate(context: vscode.ExtensionContext) {
 
 	// Register the 'attachCommit' command
 	context.subscriptions.push(
-        vscode.commands.registerCommand('extension.attachCommit', (nodeId: number, commitId: string) => {
-			provider.receiveInformation("attachCommit", {nodeId: nodeId, commitId: commitId});
+        vscode.commands.registerCommand('extension.attachCommit', (nodeId: number, commitId: string, branchId: string) => {
+			provider.receiveInformation("attachCommit", {nodeId: nodeId, commitId: commitId, branchId: branchId});
             if (graphView) {
-                graphView.webview.postMessage({ command: 'attachCommit', nodeId, commitId });
+                graphView.webview.postMessage({ command: 'attachCommit', nodeId, commitId, branchId });
             } else {
                 //vscode.window.showErrorMessage('No graph panel is currently open.');
             }
@@ -347,7 +349,7 @@ class DebugViewProvider implements vscode.WebviewViewProvider {
 
 							const log = await git.log({ fs, gitdir: gitLoc });
 							//0 for the root node, but could change eventually if we allow multiple roots (issues)
-							vscode.commands.executeCommand('extension.attachCommit', 0, log[0].oid);
+							vscode.commands.executeCommand('extension.attachCommit', 0, log[0].oid, "master");
 
 						} catch (error) {
 							console.error(error);
@@ -362,10 +364,35 @@ class DebugViewProvider implements vscode.WebviewViewProvider {
 					}
 				case 'createCommit':
 					{
-						await saveAllFiles();
+						//await saveAllFiles();
 						const activeNode = data.activeNode;
 						//git repo fileLoc
 						const gitLoc = this._globalStorage.path;
+
+						//branch information
+						let branch = "";
+
+						//if childCheck > 1, you need to make a new branch
+						if (data.childCheck > 1) {
+							/*
+								I think this needs a random number or string attached to it.
+								The format of parentBranch-branch(# of children) does not guarantee uniqueness.
+							*/
+							let uniqueId = await generateUniqueString(8);
+							let newBranch = data.parentBranch + "-branch" + data.childCheck.toString() + "-" + uniqueId;
+							await git.branch({ fs, gitdir: gitLoc, ref: newBranch });
+							if (workspaceFolder !== null) {
+								await git.checkout({ fs, dir: workspaceFolder, gitdir: gitLoc, ref: newBranch });
+							}
+							branch = newBranch;
+						} else {
+							branch = data.parentBranch;
+						}
+
+						let currentBranch = await git.currentBranch({ fs, gitdir: gitLoc });
+						if (currentBranch !== branch && workspaceFolder !== null) {
+							await git.checkout({ fs, dir: workspaceFolder, gitdir: gitLoc, ref: branch });
+						}
 
 						//get all files and add them via git
 						if (workspaceFolder !== null) {
@@ -392,7 +419,7 @@ class DebugViewProvider implements vscode.WebviewViewProvider {
 
 						const log = await git.log({ fs, gitdir: gitLoc });
 						//0 for the root node, but could change eventually if we allow multiple roots (issues)
-						vscode.commands.executeCommand('extension.attachCommit', activeNode, log[0].oid);
+						vscode.commands.executeCommand('extension.attachCommit', activeNode, log[0].oid, branch);
 					}
 			}
 		});
@@ -516,8 +543,16 @@ async function listFiles(dirPath: string): Promise<FileList> {
 	return files;
   }
 
-async function restoreToCommit({ fs, workspaceFolder, dir, commitHash }: {fs: any, workspaceFolder: string, dir: string, commitHash: string}) {
+async function restoreToCommit({ fs, workspaceFolder, dir, commitHash, branchId }: {fs: any, workspaceFolder: string, dir: string, commitHash: string, branchId: string}) {
 	try {
+		// Checkout the branch
+		await git.checkout({
+			fs,
+			dir: workspaceFolder,
+			gitdir: dir,
+			ref: branchId
+		});
+
 		// Checkout the specific commit
 		await git.checkout({
 		  fs,
@@ -556,6 +591,19 @@ async function saveAllFiles() {
 	});
 
 	return Promise.all(savePromises);
+}
+
+//help function to create a unique character string
+async function generateUniqueString(stringLength: number) {
+	const characters = 'ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789';
+    let result = '';
+    const charactersLength = characters.length;
+
+    for (let i = 0; i < stringLength; i++) {
+        result += characters.charAt(Math.floor(Math.random() * charactersLength));
+    }
+
+    return result;
 }
 
 export function deactivate() {}

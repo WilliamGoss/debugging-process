@@ -53,10 +53,10 @@ export function createGraph(treeData, aNode, nCount) {
     */
 
     //active node helper function
-    function changeActiveNode(nodeId, commitId) {
+    function changeActiveNode(nodeId, commitId, branchId) {
         activeNode = nodeId; 
         updateActiveNode(nodeId); 
-        vscode.postMessage({ command: 'updateActiveNode', activeNode: nodeId, commitId: commitId});
+        vscode.postMessage({ command: 'updateActiveNode', activeNode: nodeId, commitId: commitId, branchId: branchId});
     };
 
     //new child helper function
@@ -159,7 +159,7 @@ export function createGraph(treeData, aNode, nCount) {
         .attr("fill", "#007bff") // Button color
         .attr("stroke", "#0056b3")
         .attr("stroke-width", 1)
-        .on("click", (event, d) => changeActiveNode(d.data.id, d.data.commitId)); // Example button restore
+        .on("click", (event, d) => changeActiveNode(d.data.id, d.data.commitId, d.data.branchId)); // Example button restore
 
     buttons.append('text')
         .attr("x", d => (selectedNodeWidth(d) - buttonWidth) / 2) // Center text within button
@@ -168,7 +168,7 @@ export function createGraph(treeData, aNode, nCount) {
         .attr("font-size", "12px")
         .attr("fill", "#fff")
         .text("Restore")
-        .on("click", (event, d) => changeActiveNode(d.data.id, d.data.commitId));
+        .on("click", (event, d) => changeActiveNode(d.data.id, d.data.commitId, d.data.branchId));
 /* 
     //Add new child button
     buttons.append('rect')
@@ -314,7 +314,7 @@ window.addEventListener('message', event => {
     } else if (message.command === 'updateNodeText') {
         updateNodeText(message.nodeId, message.newText);
     } else if (message.command === 'attachCommit') {
-        //updateCommitId(message.nodeId, message.commitId);
+        //updateCommitId(message.nodeId, message.commitId, message.branchId);
     }
 });
 
