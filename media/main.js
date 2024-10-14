@@ -157,6 +157,7 @@
                     nodeCount = nodeCount + 1;
                     activeNode = newActiveNode;
                     vscode.setState({root: root, nodeCount: nodeCount, activeNode: newActiveNode, nodes: nodes});
+                    updateExplorationText();
                     let newTree = generateTree(nodes);
                     vscode.postMessage({ type: 'updateGraph', command: "showD3Graph", treeData: newTree, activeNode: newActiveNode });
                     /* debug stuff */
@@ -164,7 +165,6 @@
                     document.getElementById('fileChanged').style.background = 'DodgerBlue';
                     document.getElementById('pyRun').style.background = 'DodgerBlue';
                     vscode.postMessage({ type: 'createCommit', command: "showD3Graph", activeNode: activeNode, childCheck: childCheck, parentBranch: parentBranch });
-                    updateExplorationText();
                     break;
                 }
             case 'fileChanged':
@@ -175,6 +175,11 @@
             case 'pythonRan':
                 {
                     document.getElementById('pyRun').style.background = 'MediumSeaGreen';
+                    break;
+                }
+            case 'resetNewNodeDebug':
+                {
+                    resetStatus();
                     break;
                 }
         }
