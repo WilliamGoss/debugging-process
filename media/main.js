@@ -137,7 +137,9 @@
                 {
                     const nodeToUpdate = message.data.nodeId;
                     const commitId = message.data.commitId;
+                    const branchId = message.data.branchId;
                     nodes[nodeToUpdate].commitId = commitId;
+                    nodes[nodeToUpdate].branchId = branchId;
                     vscode.setState({root: root, nodeCount: nodeCount, activeNode: activeNode, nodes: nodes});
                     let newTree = generateTree(nodes);
                     vscode.postMessage({ type: 'updateGraph', command: "showD3Graph", treeData: newTree, activeNode: activeNode });
@@ -145,11 +147,13 @@
                 }
             case 'autoCreateNode':
                 {
-                    let newNode = {name: message.data, id: nodeCount, commitId: "", children: []};
+                    let newNode = {name: message.data, id: nodeCount, commitId: "", branchId: "", children: []};
                     //change active node to the new node
                     let newActiveNode = nodeCount;
                     nodes[nodeCount] = newNode;
                     nodes[activeNode].children.push(nodeCount);
+                    let childCheck = nodes[activeNode].children.length;
+                    let parentBranch = nodes[activeNode].branchId;
                     nodeCount = nodeCount + 1;
                     activeNode = newActiveNode;
                     vscode.setState({root: root, nodeCount: nodeCount, activeNode: newActiveNode, nodes: nodes});
@@ -159,6 +163,8 @@
                     document.getElementById('htmlCount').innerHTML = nodeCount;
                     document.getElementById('fileChanged').style.background = 'DodgerBlue';
                     document.getElementById('pyRun').style.background = 'DodgerBlue';
+                    vscode.postMessage({ type: 'createCommit', command: "showD3Graph", activeNode: activeNode, childCheck: childCheck, parentBranch: parentBranch });
+                    updateExplorationText();
                     break;
                 }
             case 'fileChanged':
@@ -178,7 +184,7 @@
         const textAreaObject = document.querySelector('#view1 textarea');
         const userIssueText = textAreaObject.value;
         let newNodes = {};
-        newNodes[0] = {name: userIssueText, id: 0, commitId: "", children: []};
+        newNodes[0] = {name: userIssueText, id: 0, commitId: "", branchId: "", children: []};
         nodeCount = nodeCount + 1;
         //update the local global variables: nodes, activeNode, root
         nodes = newNodes;
@@ -243,16 +249,12 @@
                 name: node.name,
                 id: node.id,
                 commitId: node.commitId,
+                branchId: node.branchId,
                 children: node.children.map(childId => buildNode(childId))
             };
         }
 
         return buildNode(root);
-    }
-
-    //save is clicked, so a commit should be saved on the node
-    function createCommit() {
-        vscode.postMessage({ type: 'createCommit', command: "showD3Graph", activeNode: activeNode });
     }
 
     //check if any children have commits
