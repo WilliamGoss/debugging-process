@@ -17,6 +17,7 @@ export async function activate(context: vscode.ExtensionContext) {
 
 	let fileChanged = false;
 	let pythonExecuted = false;
+	let restore = false;
 
     context.subscriptions.push(
         vscode.window.registerWebviewViewProvider(DebugViewProvider.viewType, provider));
@@ -40,6 +41,13 @@ export async function activate(context: vscode.ExtensionContext) {
 		//code was run before a file was ever changed
 		if (pythonExecuted && !fileChanged) {
 			pythonExecuted = false;
+			provider.receiveInformation("resetNewNodeDebug", '');
+		}
+		//restoring the code triggers a fileChanged = true
+		if (restore && fileChanged) {
+			restore = false;
+			fileChanged = false;
+			provider.receiveInformation("resetNewNodeDebug", '');
 		}
         if (fileChanged && pythonExecuted) {
             provider.receiveInformation("autoCreateNode", `File changed`);
@@ -101,7 +109,7 @@ export async function activate(context: vscode.ExtensionContext) {
 								}
 							}
                             provider.receiveInformation("activeNode", message.activeNode);
-							fileChanged = false;
+							restore = true;
                             break;
 						//addNode might be deprecated
                         case 'addNode':
