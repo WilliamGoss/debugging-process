@@ -113,11 +113,12 @@ export function createGraph(treeData, aNode, nCount) {
     const rects = nodeGroup.append('rect')
         .attr("x", d => -baseNodeWidth(d) / 2) // Center the rectangle horizontally
         .attr("y", -baseNodeHeight / 2) // Center the rectangle vertically
-        .attr("width", d => baseNodeWidth(d))
-        .attr("height", baseNodeHeight)
-        .attr("fill", "#fff") // Default node color
+        .attr("width", d => selectedNodeWidth(d))
+        .attr("height", selectedNodeHeight)
+        .attr("fill", d => d.data.id === activeNode ? '#1f77b4' : "#fff") // Default node color
         .attr('stroke', d => d.data.id === activeNode ? 'orange' : '#000') // Orange border for active node
         .attr('stroke-width', d => d.data.id === activeNode ? 4 : 1) // Thicker border for active node
+        //.on("click", (event, d) => handleNodeClick(event, d));
         .on("click", (event, d) => handleNodeClick(event, d));
 
     // Add node labels
@@ -128,6 +129,7 @@ export function createGraph(treeData, aNode, nCount) {
         .text(d => d.data.name.slice(0, 12))
         .attr("font-size", "12px")
         .attr("fill", "#333")
+        //.on("click", (event, d) => handleNodeClick(event, d));
         .on("click", (event, d) => handleNodeClick(event, d));
 
     // Add additional info text
@@ -194,33 +196,19 @@ buttons.append("text")
     // Function to handle node click
     function handleNodeClick(event, d) {
         if (selectedNode === event.target.closest('g.node')) {
-            // Clicked the currently active node: deactivate it
-            d3.select(selectedNode).select('rect')
-                .transition() // Smooth transition
-                .duration(300)
-                .attr("fill", "#fff")
-                .attr("width", d => baseNodeWidth(d))
-                .attr("height", baseNodeHeight); // Reset size
-
-            d3.select(selectedNode).select('.info')
-                .transition() // Smooth transition
-                .duration(300)
-                .style("opacity", 0); // Hide info text
-
-            d3.select(selectedNode).select('.button')
-                .style("display", "none"); // Hide button
-
-            selectedNode = null; // Clear active node
+            //do nothing
+            return;
         } else {
             if (selectedNode) {
                 // Reset previous active node
                 d3.select(selectedNode).select('rect')
                     .transition() // Smooth transition
                     .duration(300)
-                    .attr("fill", "#fff")
-                    .attr("width", d => baseNodeWidth(d))
-                    .attr("height", baseNodeHeight); // Reset size
+                    .attr("fill", "#fff");
+                    //.attr("width", d => baseNodeWidth(d))
+                    //.attr("height", baseNodeHeight); // Reset size
 
+                    /*
                 d3.select(selectedNode).select('.info')
                     .transition() // Smooth transition
                     .duration(300)
@@ -228,6 +216,7 @@ buttons.append("text")
 
                 d3.select(selectedNode).select('.button')
                     .style("display", "none"); // Hide button
+                    */
             }
             // Set new active node
             selectedNode = event.target.closest('g.node'); // Find the closest <g> element
@@ -235,20 +224,23 @@ buttons.append("text")
             d3.select(selectedNode).select('rect')
                 .transition() // Smooth transition
                 .duration(300)
-                .attr("fill", "#1f77b4") // Highlight color
-                .attr("width", d => selectedNodeWidth(d))
-                .attr("height", selectedNodeHeight); // Further increased size
+                .attr("fill", "#1f77b4"); // Highlight color
+                //.attr("width", d => selectedNodeWidth(d))
+                //.attr("height", selectedNodeHeight); // Further increased size
 
             d3.select(selectedNode).select('.info')
                 .transition() // Smooth transition
                 .duration(300)
                 .style("opacity", 1); // Show info text
 
+                /*
             d3.select(selectedNode).select('.button')
                 .style("display", "block") // Show button
                 .transition() // Smooth transition for button appearance
                 .duration(900)
                 .style("display", "block"); // Ensure button is displayed
+            */
+            changeActiveNode(d.data.id, d.data.commitId, d.data.branchId);
         }
     }
 
@@ -257,6 +249,7 @@ buttons.append("text")
         d3.selectAll('g.node').select('rect')
             .transition()
             .duration(300)
+            .attr("fill", "#fff")
             .attr("stroke", "#000") // Reset border color to black or default color
             .attr("stroke-width", 1); // Reset border width
         
@@ -268,6 +261,7 @@ buttons.append("text")
             .select('rect')
             .transition()
             .duration(300)
+            .attr("fill", "#1f77b4")
             .attr("stroke", "#FFA500") // Set border color to orange
             .attr("stroke-width", 4); // Set border width
     }
