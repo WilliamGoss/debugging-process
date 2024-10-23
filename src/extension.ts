@@ -374,8 +374,9 @@ class DebugViewProvider implements vscode.WebviewViewProvider {
 					}
 				case 'removeRepo':
 					{
-						let directoryPath = this._globalStorage.path + '*';
-						exec(`rm -rf ${directoryPath}`);
+						let directoryPath = this._globalStorage.path;
+						//exec(`rm -rf ${directoryPath}`);
+						this.clearDirectory(directoryPath);
 						break;
 					}
 				case 'createCommit':
@@ -464,6 +465,46 @@ class DebugViewProvider implements vscode.WebviewViewProvider {
 		for (const filepath in backup) {
 			await fs.promises.writeFile(`${filepath}`, backup[filepath], 'utf8');
 		}
+	}
+
+	//Delete functionality to work cross platform
+	private clearDirectory(dirPath: string) {
+		fs.readdir(dirPath, (err, files) => {
+			if (err) {
+				console.error(`Error reading directory: ${err}`);
+				return;
+			}
+
+			const deletePromises: Promise<void>[] = files.map(file => {
+				const filePath = path.join(dirPath, file);
+				return new Promise((resolve, reject) => {
+					fs.stat(filePath, (err, stats) => {
+						if (err) {
+							return reject(err);
+						}
+						if (stats.isDirectory()) {
+							fs.rm(filePath, { recursive: true }, (err) => {
+								if (err) { return reject(err); }
+								resolve();
+							});
+						} else {
+							fs.unlink(filePath, (err) => {
+								if (err) { return reject(err); }
+								resolve();
+							});
+						}
+					});
+				});
+			});
+
+			Promise.all(deletePromises)
+				.then(() => {
+					console.log(`Directory contents removed successfully`);
+				})
+				.catch(error => {
+					console.error(`Error deleting files: ${error}`);
+				});
+		});
 	}
 
 	public receiveInformation(command: any, data: any) {
