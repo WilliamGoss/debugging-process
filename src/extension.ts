@@ -404,7 +404,7 @@ class DebugViewProvider implements vscode.WebviewViewProvider {
 						if (currentBranch !== branch && workspaceFolder !== null) {
 							const files = await listFiles(workspaceFolder);
 							const backup = await this.backupUncommittedChanges(files);
-							await git.checkout({ fs, dir: workspaceFolder, gitdir: gitLoc, ref: branch });
+							await git.checkout({ fs, dir: workspaceFolder, gitdir: gitLoc, ref: branch, force: true });
 							await this.restoreChanges(backup);
 						}
 
