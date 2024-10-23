@@ -77,16 +77,6 @@ export function createGraph(treeData, aNode, nCount) {
         return context.measureText(text).width;
     }
 
-    //debug help
-    function generateNodeText(d) {
-        let nodeText = "";
-        nodeText = nodeText + d.data.id + "\n\n";
-        nodeText = nodeText + d.data.name + "\n\n";
-        nodeText = nodeText + d.data.commitId + "\n\n";
-        nodeText = nodeText + d.data.branchId + "\n\n";
-        return nodeText;
-    }
-
     // Define padding around the text
     const padding = 15;
     const baseNodeHeight = 30; // Base height of the node
@@ -137,10 +127,9 @@ export function createGraph(treeData, aNode, nCount) {
         .attr("y", 0) // Adjust y to center text vertically
         .attr("text-anchor", "middle") // Center text horizontally
         //.text(d => d.data.name.slice(0, 12))
-        .text(d => generateNodeText(d))
+        .text(d => d.data.name)
         .attr("font-size", "12px")
-        //.attr("fill", "#333")
-        .attr("fill", "#ed0707")
+        .attr("fill", "#333")
         //.on("click", (event, d) => handleNodeClick(event, d));
         .on("click", (event, d) => handleNodeClick(event, d));
 
@@ -241,10 +230,12 @@ buttons.append("text")
                 //.attr("width", d => selectedNodeWidth(d))
                 //.attr("height", selectedNodeHeight); // Further increased size
 
+                /*
             d3.select(selectedNode).select('.info')
                 .transition() // Smooth transition
                 .duration(300)
                 .style("opacity", 1); // Show info text
+                */
 
                 /*
             d3.select(selectedNode).select('.button')

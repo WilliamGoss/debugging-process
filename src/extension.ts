@@ -18,6 +18,7 @@ export async function activate(context: vscode.ExtensionContext) {
 	let fileChanged = false;
 	let pythonExecuted = false;
 	let restore = false;
+	let gitChanged = false;
 
     context.subscriptions.push(
         vscode.window.registerWebviewViewProvider(DebugViewProvider.viewType, provider));
@@ -54,6 +55,11 @@ export async function activate(context: vscode.ExtensionContext) {
             fileChanged = false;
             pythonExecuted = false;
         }
+		if (gitChanged) {
+			fileChanged = false;
+			gitChanged = false;
+			provider.receiveInformation("resetNewNodeDebug", '');
+		}
     }, 1000); // Check every second
 
 	/*
@@ -163,8 +169,8 @@ export async function activate(context: vscode.ExtensionContext) {
 
 	// Debug to figure out why git is broken
 	context.subscriptions.push(
-        vscode.commands.registerCommand('extension.gitLoc', (gitLoc: string) => {
-			provider.receiveInformation("gitLoc", {gitLoc: gitLoc});
+        vscode.commands.registerCommand('extension.resetCodeChange', () => {
+			gitChanged = true;
         })
     );
 }
@@ -334,7 +340,6 @@ class DebugViewProvider implements vscode.WebviewViewProvider {
 						try {
 							//git repo fileLoc
 							const gitLoc = this._globalStorage.path;
-							vscode.commands.executeCommand('extension.gitLoc', gitLoc);
 
 							//get all files and add them via git
 							if (workspaceFolder !== null) {
@@ -430,6 +435,7 @@ class DebugViewProvider implements vscode.WebviewViewProvider {
 
 						const log = await git.log({ fs, gitdir: gitLoc });
 						//0 for the root node, but could change eventually if we allow multiple roots (issues)
+						vscode.commands.executeCommand('extension.resetCodeChange');
 						vscode.commands.executeCommand('extension.attachCommit', activeNode, log[0].oid, branch);
 					}
 			}
