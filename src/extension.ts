@@ -390,31 +390,25 @@ class DebugViewProvider implements vscode.WebviewViewProvider {
 							let newBranch = data.parentBranch + "-branch" + data.childCheck.toString() + "-" + uniqueId;
 							await git.branch({ fs, gitdir: gitLoc, ref: newBranch });
 							if (workspaceFolder !== null) {
+								const files = await listFiles(workspaceFolder);
+								const backup = await this.backupUncommittedChanges(files);
 								await git.checkout({ fs, dir: workspaceFolder, gitdir: gitLoc, ref: newBranch, force: true });
+								await this.restoreChanges(backup);
 							}
 							branch = newBranch;
 						} else {
 							branch = data.parentBranch;
 						}
-
+						
 						let currentBranch = await git.currentBranch({ fs, gitdir: gitLoc });
 						if (currentBranch !== branch && workspaceFolder !== null) {
-							await git.checkout({ fs, dir: workspaceFolder, gitdir: gitLoc, ref: branch, force: true });
+							const files = await listFiles(workspaceFolder);
+							const backup = await this.backupUncommittedChanges(files);
+							await git.checkout({ fs, dir: workspaceFolder, gitdir: gitLoc, ref: branch });
+							await this.restoreChanges(backup);
 						}
 
-						//get all files and add them via git
-						if (workspaceFolder !== null) {
-							const files = await listFiles(workspaceFolder);
-							for (const file of files) {
-								const relativeFilePath = path.relative(workspaceFolder, file);
-								await git.add({
-									fs,
-									dir: workspaceFolder,
-									gitdir: gitLoc,
-									filepath: relativeFilePath
-								});
-							}
-						}
+						this.gitAddFiles(gitLoc);
 
 						//create the commit
 						const commitMessage = 'Updating node with ID ' + activeNode;
@@ -431,6 +425,37 @@ class DebugViewProvider implements vscode.WebviewViewProvider {
 					}
 			}
 		});
+	}
+
+	private async gitAddFiles(gitLoc: string) {
+		//get all files and add them via git
+		if (workspaceFolder !== null) {
+			const files = await listFiles(workspaceFolder);
+			for (const file of files) {
+				const relativeFilePath = path.relative(workspaceFolder, file);
+				await git.add({
+					fs,
+					dir: workspaceFolder,
+					gitdir: gitLoc,
+					filepath: relativeFilePath
+				});
+			}
+		}
+	}
+
+	private async backupUncommittedChanges(filepaths: string[]) {
+		const backup: { [filepath: string]: string } = {};
+		for (const filepath of filepaths) {
+			const content = await fs.promises.readFile(`${filepath}`, 'utf8');
+			backup[filepath] = content;
+		}
+		return backup;
+	}
+
+	private async restoreChanges(backup: { [filepath: string]: string }) {
+		for (const filepath in backup) {
+			await fs.promises.writeFile(`${filepath}`, backup[filepath], 'utf8');
+		}
 	}
 
 	public receiveInformation(command: any, data: any) {
