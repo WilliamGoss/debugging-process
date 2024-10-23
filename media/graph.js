@@ -152,7 +152,7 @@ export function createGraph(treeData, aNode, nCount) {
         .attr("text-anchor", "middle") // Align text horizontally
         .attr("font-size", "10px")
         //.attr("fill", "#666")
-        .style("opacity", 0) // Initially hidden
+        .style("opacity", 0); // Initially hidden
         //.text(d => generateNodeText(d)); // Full name field
         //.text(d => d.data.name);
 

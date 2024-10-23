@@ -72,6 +72,8 @@
                 <br/>
                 <p> Initial Node: </p> <p id="firstNode">None</p>
                 <br/>
+                <p> Git location: <p> <p id="gitLoc"></p>
+                <br/>
                 <br/>
                 <button id="clearStatus">Clear Status</button>
             </div>
@@ -180,6 +182,11 @@
             case 'resetNewNodeDebug':
                 {
                     resetStatus();
+                    break;
+                }
+            case 'gitLoc':
+                {
+                    document.getElementById('gitLoc').innerHTML = message.data.gitLoc;
                     break;
                 }
         }
