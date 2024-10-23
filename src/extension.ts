@@ -160,6 +160,13 @@ export async function activate(context: vscode.ExtensionContext) {
             }
         })
     );
+
+	// Debug to figure out why git is broken
+	context.subscriptions.push(
+        vscode.commands.registerCommand('extension.gitLoc', (gitLoc: string) => {
+			provider.receiveInformation("gitLoc", {gitLoc: gitLoc});
+        })
+    );
 }
 
 /*
@@ -327,6 +334,7 @@ class DebugViewProvider implements vscode.WebviewViewProvider {
 						try {
 							//git repo fileLoc
 							const gitLoc = this._globalStorage.path;
+							vscode.commands.executeCommand('extension.gitLoc', gitLoc);
 
 							//get all files and add them via git
 							if (workspaceFolder !== null) {
