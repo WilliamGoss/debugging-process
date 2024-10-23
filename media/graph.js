@@ -80,10 +80,11 @@ export function createGraph(treeData, aNode, nCount) {
     //debug help
     function generateNodeText(d) {
         let nodeText = "";
-        nodeText = nodeText + d.data.name + "\n";
-        nodeText = nodeText + d.data.commitId + "\n";
-        nodeText = nodeText + d.data.branchId + "\n";
-        return nodeText.split("\n");
+        nodeText = nodeText + d.data.id + "\n\n";
+        nodeText = nodeText + d.data.name + "\n\n";
+        nodeText = nodeText + d.data.commitId + "\n\n";
+        nodeText = nodeText + d.data.branchId + "\n\n";
+        return nodeText;
     }
 
     // Define padding around the text
@@ -136,16 +137,10 @@ export function createGraph(treeData, aNode, nCount) {
         .attr("y", 0) // Adjust y to center text vertically
         .attr("text-anchor", "middle") // Center text horizontally
         //.text(d => d.data.name.slice(0, 12))
-        //.text(d => generateNodeText(d))
-        .selectAll("tspan")
-        .data(d => generateNodeText(d))
-        .enter()
-        .append("tspan")
-        .attr("x", 0)  // Keep the x position consistent for all lines
-        .attr("dy", (d, i) => i === 0 ? 0 : "1.2em")
-        .text(d => d)
+        .text(d => generateNodeText(d))
         .attr("font-size", "12px")
-        .attr("fill", "#333")
+        //.attr("fill", "#333")
+        .attr("fill", "#ed0707")
         //.on("click", (event, d) => handleNodeClick(event, d));
         .on("click", (event, d) => handleNodeClick(event, d));
 
@@ -160,7 +155,6 @@ export function createGraph(treeData, aNode, nCount) {
         .style("opacity", 0) // Initially hidden
         //.text(d => generateNodeText(d)); // Full name field
         //.text(d => d.data.name);
-        .text("yo");
 
     // Add buttons to nodes
     const buttonWidth = 60;
