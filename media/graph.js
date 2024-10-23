@@ -77,14 +77,23 @@ export function createGraph(treeData, aNode, nCount) {
         return context.measureText(text).width;
     }
 
+    //debug help
+    function generateNodeText(d) {
+        let nodeText = "";
+        nodeText = nodeText + d.data.name + "\n";
+        nodeText = nodeText + d.data.commitId + "\n";
+        nodeText = nodeText + d.data.branchId + "\n";
+        return nodeText.split("\n");
+    }
+
     // Define padding around the text
     const padding = 15;
     const baseNodeHeight = 30; // Base height of the node
     //const baseNodeWidth = d => getTextWidth(d.data.name) + padding;
     //gives a 12 character node size standard
     const baseNodeWidth = d => getTextWidth("abcdefghijkl") + padding;
-    const selectedNodeHeight = baseNodeHeight * 5; // Increased height for active node
-    const selectedNodeWidth = d => baseNodeWidth(d) * 5; // Increased width for active node
+    const selectedNodeHeight = baseNodeHeight * 3; // Increased height for active node
+    const selectedNodeWidth = d => baseNodeWidth(d) * 3; // Increased width for active node
 
     // Define the force layout simulation
     const simulation = d3.forceSimulation(root.descendants())
@@ -123,10 +132,18 @@ export function createGraph(treeData, aNode, nCount) {
 
     // Add node labels
     nodeGroup.append('text')
-        .attr("x", 0)
-        .attr("y", 5) // Adjust y to center text vertically
+        .attr("x", d => selectedNodeWidth(d) / 2)
+        .attr("y", 0) // Adjust y to center text vertically
         .attr("text-anchor", "middle") // Center text horizontally
-        .text(d => d.data.name.slice(0, 12))
+        //.text(d => d.data.name.slice(0, 12))
+        //.text(d => generateNodeText(d))
+        .selectAll("tspan")
+        .data(d => generateNodeText(d))
+        .enter()
+        .append("tspan")
+        .attr("x", 0)  // Keep the x position consistent for all lines
+        .attr("dy", (d, i) => i === 0 ? 0 : "1.2em")
+        .text(d => d)
         .attr("font-size", "12px")
         .attr("fill", "#333")
         //.on("click", (event, d) => handleNodeClick(event, d));
@@ -141,7 +158,9 @@ export function createGraph(treeData, aNode, nCount) {
         .attr("font-size", "10px")
         //.attr("fill", "#666")
         .style("opacity", 0) // Initially hidden
-        .text(d => d.data.name); // Full name field
+        //.text(d => generateNodeText(d)); // Full name field
+        //.text(d => d.data.name);
+        .text("yo");
 
     // Add buttons to nodes
     const buttonWidth = 60;
