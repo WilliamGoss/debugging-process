@@ -390,7 +390,7 @@ class DebugViewProvider implements vscode.WebviewViewProvider {
 							let newBranch = data.parentBranch + "-branch" + data.childCheck.toString() + "-" + uniqueId;
 							await git.branch({ fs, gitdir: gitLoc, ref: newBranch });
 							if (workspaceFolder !== null) {
-								await git.checkout({ fs, dir: workspaceFolder, gitdir: gitLoc, ref: newBranch });
+								await git.checkout({ fs, dir: workspaceFolder, gitdir: gitLoc, ref: newBranch, force: true });
 							}
 							branch = newBranch;
 						} else {
@@ -399,7 +399,7 @@ class DebugViewProvider implements vscode.WebviewViewProvider {
 
 						let currentBranch = await git.currentBranch({ fs, gitdir: gitLoc });
 						if (currentBranch !== branch && workspaceFolder !== null) {
-							await git.checkout({ fs, dir: workspaceFolder, gitdir: gitLoc, ref: branch });
+							await git.checkout({ fs, dir: workspaceFolder, gitdir: gitLoc, ref: branch, force: true });
 						}
 
 						//get all files and add them via git
