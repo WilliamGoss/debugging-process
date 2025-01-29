@@ -5,7 +5,7 @@ import * as path from 'path';
 
 let graphView: vscode.WebviewPanel | undefined = undefined;
 
-const workspaceFolder = vscode.workspace.workspaceFolders ? vscode.workspace.workspaceFolders[0].uri.fsPath : null;
+let workspaceFolder = vscode.workspace.workspaceFolders ? vscode.workspace.workspaceFolders[0].uri.fsPath : null;
 
 export async function activate(context: vscode.ExtensionContext) {
 
@@ -36,6 +36,24 @@ export async function activate(context: vscode.ExtensionContext) {
 			provider.receiveInformation("pythonRan", "");
 		}
 	}));
+
+	vscode.workspace.onDidChangeWorkspaceFolders(() => {
+		const newWorkspaceFolder = vscode.workspace.workspaceFolders ? vscode.workspace.workspaceFolders[0].uri.fsPath : null;
+
+		//if change is detected on workspace folders
+		if (workspaceFolder !== newWorkspaceFolder) {
+			workspaceFolder = newWorkspaceFolder;
+
+			if (workspaceFolder) {
+				//from null to real workspace
+				provider.receiveInformation("workspaceInfo", newWorkspaceFolder);
+			} else {
+				//from real workspace  to null
+				//not sure this is possible?
+				provider.receiveInformation("workspaceInfo", "null");
+			}
+		}
+	});
 
 	// Check for file changes and Python execution
     setInterval(() => {
@@ -254,10 +272,15 @@ function getWebviewContent(webview: vscode.Webview, extensionUri: vscode.Uri, tr
                 height: 100vh;
                 border: 1px solid black;
             }
+			canvas {
+				border: 1px solid black;
+				display: block;
+				margin: auto;
+			}
         </style>
     </head>
     <body>
-        <div id="graph">Loading...</div>
+        <canvas id="canvas"></canvas>
         <script type="module">
 			const treeData = ${JSON.stringify(treeData)};
 			const activeNode = ${activeNode};
@@ -549,53 +572,12 @@ class DebugViewProvider implements vscode.WebviewViewProvider {
 
 				<title>Debug</title>
 			</head>
-				<body>
-				<div class="new-bug">
-					<label for="new-bug">New Bug:</label>
-					<input type="text" id="new-bug" name="new-bug" />
-					<br/>
-					<button class="add-color-button">Start Session</button>
-				</div>
-				<br/>
-				<hr/>
-				<br/>
-				<div class="new-attempt">
-					<p>
-						<b>Bug</b>: No text rendering on page.
-					</p>
-					<br/>
-					<label for="new-attempt">Attempted Solution</label>
-					<textarea name="attempt" cols="40" rows="5">
-					</textarea>
-					<br/>
-					<button class="add-color-button">Add ?Checkpoint?</button>
-				</div>
-				<br/>
-				<hr/>
-				<br/>
-				<button class="show-tree-button">Show D3 Graph</button>
-				<br/>
-				<ul class="color-list">
-				</ul>
-				<br/>
-				<hr/>
-				<br/>
-				<p>
-				<b>Bug</b>: No text rendering on page.
-				</p>
-				<br/>
-				<div class="attempted-solution">
-					<label for="attempt">Attempted Solution</label>
-					<textarea name="attempt" cols="40" rows="5">Added print statements to the database call to check and see what data is being returned.?Should this be editable?
-					</textarea>
-				</div>
-				<br/>
-				<button class="meow-button">Restore ?Checkpoint?</button>
-				<button class="delete-checkpoint-button">?Delete?</button>
-	
-				<script nonce="${nonce}" src="${scriptUri}"></script>
-				<br/>
-				<br/>
+				<body>	
+				<script nonce="${nonce}">
+                	const workspaceData = "${workspaceFolder}";
+				</script>
+				<script nonce="${nonce}" src="${scriptUri}">
+				</script>
 				</body>
 			</html>`;
 	}
