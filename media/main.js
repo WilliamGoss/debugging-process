@@ -132,13 +132,12 @@
                 }
             case 'addNode':
                 {
-                    let newNode = {name: "New Node", id: nodeCount, commitId: "", children: []};
+                    let newNode = {text: "New Node", id: nodeCount, commitId: "", x: 0, y: 0, children: []};
                     nodes[nodeCount] = newNode;
                     nodes[message.data].children.push(nodeCount);
                     nodeCount = nodeCount + 1;
                     vscode.setState({root: root, nodeCount: nodeCount, activeNode: activeNode, nodes: nodes});
-                    let newTree = generateTree(nodes);
-                    vscode.postMessage({ type: 'updateGraph', command: "showD3Graph", treeData: newTree, activeNode: activeNode });
+                    vscode.postMessage({ type: 'updateGraph', command: "showD3Graph", treeData: nodes, activeNode: activeNode });
                     break;
                 }
             case 'attachCommit':
@@ -149,13 +148,12 @@
                     nodes[nodeToUpdate].commitId = commitId;
                     nodes[nodeToUpdate].branchId = branchId;
                     vscode.setState({root: root, nodeCount: nodeCount, activeNode: activeNode, nodes: nodes});
-                    let newTree = generateTree(nodes);
-                    vscode.postMessage({ type: 'updateGraph', command: "showD3Graph", treeData: newTree, activeNode: activeNode });
+                    vscode.postMessage({ type: 'updateGraph', command: "showD3Graph", treeData: nodes, activeNode: activeNode });
                     break;
                 }
             case 'autoCreateNode':
                 {
-                    let newNode = {name: message.data, id: nodeCount, commitId: "", branchId: "", children: []};
+                    let newNode = {text: message.data, id: nodeCount, commitId: "", branchId: "", x: nodes[activeNode].x + 50, y: nodes[activeNode].y + 50, children: []};
                     //change active node to the new node
                     let newActiveNode = nodeCount;
                     nodes[nodeCount] = newNode;
@@ -166,8 +164,8 @@
                     activeNode = newActiveNode;
                     vscode.setState({root: root, nodeCount: nodeCount, activeNode: newActiveNode, nodes: nodes});
                     updateExplorationText();
-                    let newTree = generateTree(nodes);
-                    vscode.postMessage({ type: 'updateGraph', command: "showD3Graph", treeData: newTree, activeNode: newActiveNode });
+                    let nodeArray = Object.values(nodes);
+                    vscode.postMessage({ type: 'updateGraph', command: "showD3Graph", treeData: nodeArray, activeNode: newActiveNode });
                     /* debug stuff */
                     document.getElementById('htmlCount').innerHTML = nodeCount;
                     document.getElementById('fileChanged').style.background = 'DodgerBlue';
@@ -192,9 +190,18 @@
                 }
             case 'workSpaceInfo':
                 {
-                    console.log(message.data);
                     workSpaceName = message.data;
                     showView(nodes);
+                    break;
+                }
+            case 'updateXY':
+                {
+                    const nodeToUpdate = message.data.nodeId;
+                    const newNodeX = message.data.x;
+                    const newNodeY = message.data.y;
+                    nodes[nodeToUpdate].x = newNodeX;
+                    nodes[nodeToUpdate].y = newNodeY;
+                    vscode.setState({root: root, nodeCount: nodeCount, activeNode: activeNode, nodes: nodes});
                     break;
                 }
         }
@@ -204,7 +211,7 @@
         const textAreaObject = document.querySelector('#view1 textarea');
         const userIssueText = textAreaObject.value;
         let newNodes = {};
-        newNodes[0] = {name: userIssueText, id: 0, commitId: "", branchId: "", children: []};
+        newNodes[0] = {text: userIssueText, id: 0, commitId: "", branchId: "", x: 0, y: 0, children: []};
         nodeCount = nodeCount + 1;
         //update the local global variables: nodes, activeNode, root
         nodes = newNodes;
@@ -233,8 +240,8 @@
     }
 
     function showTree(nodes) {
-        let treeData = generateTree(nodes);
-        vscode.postMessage({ type: 'showGraph', command: "showD3Graph", treeData: treeData, activeNode: activeNode });
+        const nodeArray = Object.values(nodes);
+        vscode.postMessage({ type: 'showGraph', command: "showD3Graph", treeData: nodeArray, activeNode: activeNode });
     }
 
     //updates the text in the box with the selected node -- used when a new active node is selected or on the initial extension load
@@ -246,35 +253,19 @@
             const textarea = document.querySelector('#view2 textarea[name="exploration"]');
             if (textarea) {
                 // @ts-ignore
-                textarea.value = node.name || ''; // Set the name or empty if not available
+                textarea.value = node.text || ''; // Set the text or empty if not available
             }
             //checkChildCommits(node); 
             //debug stuff
             document.getElementById('htmlCount').innerHTML = nodeCount;
-            document.getElementById('firstNode').innerHTML = nodes[0].name;      
+            document.getElementById('firstNode').innerHTML = nodes[0].text;      
         }
     }
 
     function updateText(event) {
-        nodes[activeNode].name = event.target.value;
+        nodes[activeNode].text = event.target.value;
         vscode.setState({root: root, nodeCount: nodeCount, activeNode: activeNode, nodes: nodes});
         vscode.postMessage({ type: 'updateNodeText', command: "showD3Graph", newText: event.target.value, activeNode: activeNode });
-    }
-
-    //creates the tree data for the graph
-    function generateTree(nodes) {
-        function buildNode(nodeId) {
-            const node = nodes[nodeId];
-            return {
-                name: node.name,
-                id: node.id,
-                commitId: node.commitId,
-                branchId: node.branchId,
-                children: node.children.map(childId => buildNode(childId))
-            };
-        }
-
-        return buildNode(root);
     }
 
     //check if any children have commits
