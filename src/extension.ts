@@ -139,6 +139,9 @@ export async function activate(context: vscode.ExtensionContext) {
                         case 'addNode':
                             provider.receiveInformation("addNode", message.nodeId);
                             break;
+						case 'updateXY':
+							provider.receiveInformation("updateXY", {nodeId: message.nodeId, x: message.x, y: message.y});
+							break;
                     }
                 },
                 undefined,

@@ -1,13 +1,14 @@
 import * as d3 from 'https://cdn.jsdelivr.net/npm/d3@7/+esm';
 
 export function createGraph(treeData, aNode, nCount) {
-    let data = treeData;
-    //let activeNode = 1;
+    let nodes = treeData;
+    let activeNode = aNode;
     let nodeCount = nCount;
 
     // Set up the canvas
 const canvas = document.getElementById("canvas");
 const context = canvas.getContext("2d");
+const vscode = acquireVsCodeApi();
 
 // Initial canvas offset (for dragging)
 let offsetX = 0;
@@ -19,6 +20,7 @@ let isDraggingNode = false;
 let dragStartX = 0;
 let dragStartY = 0;
 let draggedNode = null;
+let movedNode = null;
 
 // Function to set canvas size to the window size
 function resizeCanvas() {
@@ -26,16 +28,6 @@ function resizeCanvas() {
   canvas.height = window.innerHeight;
   drawNodes(); // Redraw the nodes to match the new size
 }
-
-// Example data
-const nodes = [
-  { id: 1, x: 200, y: 300, text: "This is Node 1 with a long description that needs wrapping" },
-  { id: 2, x: 400, y: 200, text: "Node 2 also has a lengthy description that won't fit in one line" },
-  { id: 3, x: 600, y: 400, text: "Node 3 text" }
-];
-
-// Active node ID
-let activeNode = 1;
 
 // Node dimensions
 const nodeSize = 100;
@@ -72,6 +64,7 @@ function getWrappedText(ctx, text, maxWidth) {
 
 // Draw all nodes
 function drawNodes() {
+
   context.clearRect(0, 0, canvas.width, canvas.height);
 
   nodes.forEach(node => {
@@ -85,6 +78,17 @@ function drawNodes() {
     // Draw the precomputed wrapped text
     drawWrappedText(context, node.wrappedText, node.x + offsetX, node.y + offsetY, 14);
   });
+}
+
+//active node helper function
+function changeActiveNode(nodeId, commitId, branchId) {
+  activeNode = nodeId; 
+  vscode.postMessage({ command: 'updateActiveNode', activeNode: nodeId, commitId: commitId, branchId: branchId});
+};
+
+//update x and y node coordinates
+function updateXY(nodeId, newX, newY) {
+  vscode.postMessage({ command: "updateXY", nodeId: nodeId, x: newX, y: newY });
 }
 
 // Text drawing helper
@@ -118,9 +122,12 @@ canvas.addEventListener("mousedown", event => {
   draggedNode = nodes.find(node => isInsideNode(x, y, node));
   
   if (draggedNode) {
+    movedNode = draggedNode.id;
     isDraggingNode = true; // Start dragging the node
     dragStartX = x;
     dragStartY = y;
+    draggedNode.initialX = draggedNode.x;
+    draggedNode.initialY = draggedNode.y;
   } else {
     isDraggingCanvas = true; // Start dragging the canvas
     dragStartX = x;
@@ -149,9 +156,15 @@ canvas.addEventListener("mousemove", event => {
 });
 
 canvas.addEventListener("mouseup", () => {
+  if (isDraggingNode) {
+    if (draggedNode.x !== draggedNode.initialX || draggedNode.y !== draggedNode.initialY) {
+      updateXY(movedNode, draggedNode.x, draggedNode.y);
+    }
+  }
   isDraggingCanvas = false;
   isDraggingNode = false;
   draggedNode = null;
+  movedNode = null;
 });
 
 canvas.addEventListener("mouseleave", () => {
@@ -166,12 +179,49 @@ canvas.addEventListener("dblclick", event => {
   const clickedNode = nodes.find(node => isInsideNode(x, y, node));
   if (clickedNode) {
     activeNode = clickedNode.id;
+    changeActiveNode(clickedNode.id, clickedNode.commitId, clickedNode.branchId);
     drawNodes();
   }
 });
 
 // Listen for window resize and adjust the canvas size
 window.addEventListener("resize", resizeCanvas);
+
+//TODO: Find what is calling the updateGraph twice when running a node with changes
+window.addEventListener('message', event => {
+  const message = event.data;
+  if (message.command === 'updateGraph' && Array.isArray(message.treeData)) {
+      let updatedActiveNode = message.activeNode;
+      let newTree = message.treeData;
+      activeNode = updatedActiveNode;
+      nodes = newTree;
+      nodes.forEach(node => {
+        node.wrappedText = getWrappedText(context, node.text, nodeSize - 2 * padding);
+      });
+      drawNodes();
+  } else if (message.command === 'updateNodeText') {
+    let node = nodes.find(n => n.id === message.nodeId);
+    if (node) {
+        node.text = message.newText;
+        node.wrappedText = getWrappedText(context, node.text, nodeSize - 2 * padding);
+
+        // Clear only the node's region
+        context.clearRect(node.x - nodeSize / 2 + offsetX - 1, 
+                          node.y - nodeSize / 2 + offsetY - 1, 
+                          nodeSize + 2, nodeSize + 2);
+
+        // Redraw only this node
+        context.beginPath();
+        context.rect(node.x - nodeSize / 2 + offsetX, node.y - nodeSize / 2 + offsetY, nodeSize, nodeSize);
+        context.fillStyle = node.id === activeNode ? "lightblue" : "white";
+        context.fill();
+        context.stroke();
+
+        // Redraw the text inside the node
+        drawWrappedText(context, node.wrappedText, node.x + offsetX, node.y + offsetY, 14);
+    }
+  }
+});
 
 // Initial setup
 resizeCanvas();
