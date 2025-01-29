@@ -4,6 +4,8 @@
     // @ts-ignore
     const vscode = acquireVsCodeApi();
 
+    let workSpaceName = workspaceData;
+
     //get node tree state
     let nodes;
     let nodeCount;
@@ -28,6 +30,9 @@
     let viewId = '';
     
     document.body.innerHTML = `
+        <div id="view0" class="hidden">
+            <p> Please select a workspace to continue. </p>
+        </div>
         <div id="view1" class="hidden">
             <p>Describe your issue and then click 'Open Issue' to start.</p>
             <br/>
@@ -97,12 +102,15 @@
     showView(nodes);
 
     function showView(nodes) {
-        if (Object.keys(nodes).length === 0) {
+        if (workSpaceName === "null") {
+            viewId = 'view0';
+        }
+        else if (Object.keys(nodes).length === 0) {
             viewId = 'view1';
         } else {
             viewId= 'view2';
         }
-        const views = ['view1', 'view2'];
+        const views = ['view0', 'view1', 'view2'];
         views.forEach(view => {
             // @ts-ignore: Object is possibly 'null'.
             document.getElementById(view).classList.toggle('visible', view === viewId);
@@ -180,6 +188,13 @@
             case 'resetNewNodeDebug':
                 {
                     resetStatus();
+                    break;
+                }
+            case 'workSpaceInfo':
+                {
+                    console.log(message.data);
+                    workSpaceName = message.data;
+                    showView(nodes);
                     break;
                 }
         }
