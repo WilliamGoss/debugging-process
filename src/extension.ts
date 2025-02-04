@@ -9,9 +9,21 @@ let workspaceFolder = vscode.workspace.workspaceFolders ? vscode.workspace.works
 
 export async function activate(context: vscode.ExtensionContext) {
 
+	// Create the extension folder to hold the git logic
+    const folderName = 'uiuc-goss.debugging-process';
+    const folderPath = path.join(context.globalStorageUri.fsPath, folderName);
+
+    // Ensure the folder is created
+    fs.promises.mkdir(folderPath, { recursive: true })
+        .then(() => {
+            console.log(`Folder created at ${folderPath}`);
+        })
+        .catch((err) => {
+            console.error(`Failed to create folder: ${err}`);
+        });
+
 	const watcher = vscode.workspace.createFileSystemWatcher('**/*.py');
 
-	console.log(context.globalStorageUri.path);
 	const globalFolder = context.globalStorageUri.path;
 
     const provider = new DebugViewProvider(context.extensionUri, context.globalStorageUri);
