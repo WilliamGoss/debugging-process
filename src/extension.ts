@@ -376,14 +376,14 @@ class DebugViewProvider implements vscode.WebviewViewProvider {
 					}
 				case 'initializeRepo':
 					{
-						console.log('init repo called');
 						try {
 							//git repo fileLoc
 							const gitLoc = this._globalStorage.path;
 
 							//get all files and add them via git
 							if (workspaceFolder !== null) {
-								console.log('workspace folder is not null');
+								console.log('workspace folder: ', workspaceFolder);
+								console.log('gitdir: ', gitLoc);
 								//create the git repo
 								await git.init({ fs, dir: workspaceFolder, gitdir: gitLoc });
 								console.log('init was called');
@@ -400,8 +400,6 @@ class DebugViewProvider implements vscode.WebviewViewProvider {
 										console.error(`Error adding file: ${error.message}`);
 									});
 								}
-							} else {
-								console.log("workspace folder is blank???");
 							}
 
 							//create the initial commit
