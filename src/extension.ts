@@ -11,6 +11,7 @@ export async function activate(context: vscode.ExtensionContext) {
 
 	const watcher = vscode.workspace.createFileSystemWatcher('**/*.py');
 
+	console.log(context.globalStorageUri.path);
 	const globalFolder = context.globalStorageUri.path;
 
     const provider = new DebugViewProvider(context.extensionUri, context.globalStorageUri);
