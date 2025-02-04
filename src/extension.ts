@@ -517,6 +517,10 @@ class DebugViewProvider implements vscode.WebviewViewProvider {
 
 	//Delete functionality to work cross platform
 	private clearDirectory(dirPath: string) {
+		// Check for paths on Windows and remove the leading slash if it is Windows
+		if (process.platform === 'win32' && dirPath.startsWith('/')) {
+			dirPath = dirPath.substring(1); // Remove the leading slash for Windows
+		}
 		console.log(dirPath);
 		fs.readdir(dirPath, (err, files) => {
 			if (err) {
