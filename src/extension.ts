@@ -653,7 +653,6 @@ async function restoreToCommit({ fs, workspaceFolder, dir, commitHash, branchId 
 	if (process.platform === 'win32' && dir.startsWith('/')) {
 		dir = dir.substring(1); // Remove the leading slash for Windows
 	}
-	console.log(dir);
 	try {
 		// Checkout the branch
 		await git.checkout({

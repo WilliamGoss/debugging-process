@@ -190,6 +190,12 @@ window.addEventListener("resize", resizeCanvas);
 //TODO: Find what is calling the updateGraph twice when running a node with changes
 window.addEventListener('message', event => {
   const message = event.data;
+  if (message.command === 'attachCommit') {
+    // A new commit was made, so the latest node needs to have it attached
+    let node = nodes.find(n => n.id === message.nodeId);
+    node.commitId = message.commitId;  
+    node.branchId = message.branchId;
+  }
   if (message.command === 'updateGraph' && Array.isArray(message.treeData)) {
       let updatedActiveNode = message.activeNode;
       let newTree = message.treeData;
