@@ -179,9 +179,6 @@ canvas.addEventListener("dblclick", event => {
   const clickedNode = nodes.find(node => isInsideNode(x, y, node));
   if (clickedNode) {
     activeNode = clickedNode.id;
-    console.log('node id: ', clickedNode.id);
-    console.log('branch id: ', clickedNode.branchId);
-    console.log('commitId: ', clickedNode.commitId);
     changeActiveNode(clickedNode.id, clickedNode.commitId, clickedNode.branchId);
     drawNodes();
   }
