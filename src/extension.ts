@@ -376,14 +376,17 @@ class DebugViewProvider implements vscode.WebviewViewProvider {
 					}
 				case 'initializeRepo':
 					{
+						console.log('init repo called');
 						try {
 							//git repo fileLoc
 							const gitLoc = this._globalStorage.path;
 
 							//get all files and add them via git
 							if (workspaceFolder !== null) {
+								console.log('workspace folder is not null');
 								//create the git repo
 								await git.init({ fs, dir: workspaceFolder, gitdir: gitLoc });
+								console.log('init was called');
 
 								const files = await listFiles(workspaceFolder);
 								for (const file of files) {
@@ -402,12 +405,14 @@ class DebugViewProvider implements vscode.WebviewViewProvider {
 							}
 
 							//create the initial commit
+							console.log('trying to commit');
 							await git.commit({
 								fs,
 								gitdir: gitLoc,
 								author: { name: 'Debug Extension', email: 'debug@extension.com' },
 								message: 'Initial Repo Created'
 							});
+							console.log('committed');
 
 							const log = await git.log({ fs, gitdir: gitLoc });
 							//0 for the root node, but could change eventually if we allow multiple roots (issues)
@@ -520,7 +525,6 @@ class DebugViewProvider implements vscode.WebviewViewProvider {
 		if (process.platform === 'win32' && dirPath.startsWith('/')) {
 			dirPath = dirPath.substring(1); // Remove the leading slash for Windows
 		}
-		console.log(dirPath);
 		fs.readdir(dirPath, (err, files) => {
 			if (err) {
 				console.error(`Error reading directory: ${err}`);
