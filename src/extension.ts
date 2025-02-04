@@ -16,20 +16,22 @@ export async function activate(context: vscode.ExtensionContext) {
 
     // Ensure the folder is created inside globalStorage
     // If we're on Linux or macOS, we need to append the folderName once
-    let folderPath: string;
+    //let folderPath: string;
 
     // On Linux/macOS, we join the path normally
+	/*
     if (process.platform === 'win32') {
         folderPath = path.join(globalStoragePath, folderName);
     } else {
         folderPath = globalStoragePath;
     }
+	*/
 
     // Ensure the folder is created
 	// logging for folder creation
-    fs.promises.mkdir(folderPath, { recursive: true })
+    fs.promises.mkdir(globalStoragePath, { recursive: true })
         .then(() => {
-            console.log(`Folder created at ${folderPath}`);
+            console.log(`Folder created at ${globalStoragePath}`);
         })
         .catch((err) => {
             console.error(`Failed to create folder: ${err}`);
