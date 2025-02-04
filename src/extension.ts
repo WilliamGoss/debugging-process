@@ -37,6 +37,7 @@ export async function activate(context: vscode.ExtensionContext) {
 		}
 	}));
 
+	/*
 	vscode.workspace.onDidChangeWorkspaceFolders(() => {
 		const newWorkspaceFolder = vscode.workspace.workspaceFolders ? vscode.workspace.workspaceFolders[0].uri.fsPath : null;
 
@@ -54,6 +55,7 @@ export async function activate(context: vscode.ExtensionContext) {
 			}
 		}
 	});
+	*/
 
 	// Check for file changes and Python execution
     setInterval(() => {
