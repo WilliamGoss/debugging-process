@@ -14,6 +14,7 @@ export async function activate(context: vscode.ExtensionContext) {
     const folderPath = path.join(context.globalStorageUri.fsPath, folderName);
 
     // Ensure the folder is created
+	// logging for folder creation
     fs.promises.mkdir(folderPath, { recursive: true })
         .then(() => {
             console.log(`Folder created at ${folderPath}`);
@@ -516,6 +517,7 @@ class DebugViewProvider implements vscode.WebviewViewProvider {
 
 	//Delete functionality to work cross platform
 	private clearDirectory(dirPath: string) {
+		console.log(dirPath);
 		fs.readdir(dirPath, (err, files) => {
 			if (err) {
 				console.error(`Error reading directory: ${err}`);
