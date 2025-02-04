@@ -649,6 +649,9 @@ async function listFiles(dirPath: string): Promise<FileList> {
   }
 
 async function restoreToCommit({ fs, workspaceFolder, dir, commitHash, branchId }: {fs: any, workspaceFolder: string, dir: string, commitHash: string, branchId: string}) {
+	console.log('restore called');
+	console.log('gitloc: ', dir);
+	console.log('workspace: ', workspaceFolder);
 	try {
 		// Checkout the branch
 		await git.checkout({
