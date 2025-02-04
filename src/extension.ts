@@ -378,7 +378,14 @@ class DebugViewProvider implements vscode.WebviewViewProvider {
 					{
 						try {
 							//git repo fileLoc
-							const gitLoc = this._globalStorage.path;
+							const gitPath = this._globalStorage.path;
+							let gitLoc: string;
+							// Handle windows extra slash
+							if (process.platform === 'win32' && gitPath.startsWith('/')) {
+								gitLoc = gitPath.substring(1); // Remove the leading slash for Windows
+							} else {
+								gitLoc = gitPath;
+							}
 
 							//get all files and add them via git
 							if (workspaceFolder !== null) {
