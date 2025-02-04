@@ -11,30 +11,13 @@ export async function activate(context: vscode.ExtensionContext) {
 
 	const globalStoragePath = context.globalStorageUri.fsPath;
 
-    // Define the folder name
-    const folderName = 'uiuc-goss.debugging-process';
-
-    // Ensure the folder is created inside globalStorage
-    // If we're on Linux or macOS, we need to append the folderName once
-    //let folderPath: string;
-
-    // On Linux/macOS, we join the path normally
-	/*
-    if (process.platform === 'win32') {
-        folderPath = path.join(globalStoragePath, folderName);
-    } else {
-        folderPath = globalStoragePath;
-    }
-	*/
-
     // Ensure the folder is created
-	// logging for folder creation
     fs.promises.mkdir(globalStoragePath, { recursive: true })
         .then(() => {
-            console.log(`Folder created at ${globalStoragePath}`);
+            //console.log(`Folder created at ${globalStoragePath}`);
         })
         .catch((err) => {
-            console.error(`Failed to create folder: ${err}`);
+            //console.error(`Failed to create folder: ${err}`);
         });
 
 	const watcher = vscode.workspace.createFileSystemWatcher('**/*.py');
@@ -414,6 +397,8 @@ class DebugViewProvider implements vscode.WebviewViewProvider {
 										console.error(`Error adding file: ${error.message}`);
 									});
 								}
+							} else {
+								console.log("workspace folder is blank???");
 							}
 
 							//create the initial commit
