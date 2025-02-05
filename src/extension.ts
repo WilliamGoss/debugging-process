@@ -31,8 +31,9 @@ export async function activate(context: vscode.ExtensionContext) {
 	let restore = false;
 	let gitChanged = false;
 
-    context.subscriptions.push(
-        vscode.window.registerWebviewViewProvider(DebugViewProvider.viewType, provider));
+    //context.subscriptions.push(
+        vscode.window.registerWebviewViewProvider(DebugViewProvider.viewType, provider);
+	//);
 
 	// detect changes to files
 	watcher.onDidChange((uri) => {
