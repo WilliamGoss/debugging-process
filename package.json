@@ -3,7 +3,7 @@
   "displayName": "Debugging Process",
   "description": "Helps to understand debugging process",
   "publisher": "uiuc-goss",
-  "version": "0.0.37",
+  "version": "0.0.38",
   "engines": {
     "vscode": "^1.93.0"
   },
