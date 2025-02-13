@@ -211,7 +211,7 @@
         const textAreaObject = document.querySelector('#view1 textarea');
         const userIssueText = textAreaObject.value;
         let newNodes = {};
-        newNodes[0] = {text: userIssueText, id: 0, commitId: "", branchId: "", x: 0, y: 0, children: []};
+        newNodes[0] = {text: userIssueText, id: 0, commitId: "", branchId: "", x: 250, y: 250, children: []};
         nodeCount = nodeCount + 1;
         //update the local global variables: nodes, activeNode, root
         nodes = newNodes;

@@ -119,7 +119,7 @@ export async function activate(context: vscode.ExtensionContext) {
 
             graphView = vscode.window.createWebviewPanel(
                 'd3Graph',
-                'D3 Graph',
+                'Canvas',
                 vscode.ViewColumn.One,
                 {
                     enableScripts: true,
@@ -277,7 +277,7 @@ function getWebviewContent(webview: vscode.Webview, extensionUri: vscode.Uri, tr
     <head>
         <meta charset="UTF-8">
         <meta name="viewport" content="width=device-width, initial-scale=1.0">
-        <title>D3 Directed Graph</title>
+        <title>Canvas</title>
         <style>
             body {
                 margin: 0;
@@ -293,6 +293,19 @@ function getWebviewContent(webview: vscode.Webview, extensionUri: vscode.Uri, tr
 				border: 1px solid black;
 				display: block;
 				margin: auto;
+			}
+			.node-text {
+				overflow: scroll;
+				user-select: none; /* Disable node text selection */
+				color: black;
+			}
+			/* Hide the scrollbar but keep the scrolling functionality */
+			.node-text::-webkit-scrollbar {
+				display: none; /* Hides the scrollbar */
+			}
+			.node-text {
+				-ms-overflow-style: none;  /* For Internet Explorer and Edge */
+				scrollbar-width: none;     /* For Firefox */
 			}
         </style>
     </head>

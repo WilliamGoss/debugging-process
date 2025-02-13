@@ -6,77 +6,107 @@ export function createGraph(treeData, aNode, nCount) {
     let nodeCount = nCount;
 
     // Set up the canvas
-const canvas = document.getElementById("canvas");
-const context = canvas.getContext("2d");
-const vscode = acquireVsCodeApi();
+    const canvas = document.getElementById("canvas");
+    const context = canvas.getContext("2d");
+    const vscode = acquireVsCodeApi();
 
-// Initial canvas offset (for dragging)
-let offsetX = 0;
-let offsetY = 0;
+    // Initial canvas offset (for dragging)
+    let offsetX = 0;
+    let offsetY = 0;
 
-// Flags for dragging state
-let isDraggingCanvas = false;
-let isDraggingNode = false;
-let dragStartX = 0;
-let dragStartY = 0;
-let draggedNode = null;
-let movedNode = null;
+    // Flags for dragging state
+    let isDraggingCanvas = false;
+    let isDraggingNode = false;
+    let dragStartX = 0;
+    let dragStartY = 0;
+    let draggedNode = null;
+    let movedNode = null;
+    let canvasOffsetX = 0;
+    let canvasOffsetY = 0;
+    let canvasDragStartX = 0;
+    let canvasDragStartY = 0;
+    let currentOffsetX = 0;
+    let currentOffsetY = 0;
+    let initialOffsetX = 0;
+    let initialOffsetY = 0;
 
-// Function to set canvas size to the window size
-function resizeCanvas() {
-  canvas.width = window.innerWidth;
-  canvas.height = window.innerHeight;
-  drawNodes(); // Redraw the nodes to match the new size
-}
-
-// Node dimensions
-const nodeSize = 100;
-const padding = 10;
-
-// Precompute wrapped text for all nodes
-nodes.forEach(node => {
-  node.wrappedText = getWrappedText(context, node.text, nodeSize - 2 * padding);
-});
-
-// Function to calculate wrapped text
-function getWrappedText(ctx, text, maxWidth) {
-  const words = text.split(" ");
-  let line = "";
-  const lines = [];
-
-  words.forEach(word => {
-    const testLine = line + word + " ";
-    const testWidth = ctx.measureText(testLine).width;
-    if (testWidth > maxWidth) {
-      lines.push(line.trim());
-      line = word + " ";
-    } else {
-      line = testLine;
+    // Function to set canvas size to the window size
+    function resizeCanvas() {
+      canvas.width = window.innerWidth;
+      canvas.height = window.innerHeight;
+      drawNodes(); // Redraw the nodes to match the new size
     }
-  });
 
-  if (line) {
-    lines.push(line.trim());
-  }
+    // Node dimensions
+    const nodeSize = 100;
+    const padding = 10;
 
-  return lines;
-}
+    // Precompute wrapped text for all nodes
+    nodes.forEach(node => {
+      node.wrappedText = getWrappedText(context, node.text, nodeSize - 2 * padding);
+    });
+
+    // Function to calculate wrapped text
+    function getWrappedText(ctx, text, maxWidth) {
+      const words = text.split(" ");
+      let line = "";
+      const lines = [];
+
+      words.forEach(word => {
+        const testLine = line + word + " ";
+        const testWidth = ctx.measureText(testLine).width;
+        if (testWidth > maxWidth) {
+          lines.push(line.trim());
+          line = word + " ";
+        } else {
+          line = testLine;
+        }
+      });
+
+      if (line) {
+        lines.push(line.trim());
+      }
+
+      return lines;
+    }
+
+let nodeDivs = [];
 
 // Draw all nodes
 function drawNodes() {
 
-  context.clearRect(0, 0, canvas.width, canvas.height);
+  // Create nodes only once
+  nodes.forEach((node, index) => {
+    // Check if the div for the node already exists
+    let nodeDiv = nodeDivs[index];
 
-  nodes.forEach(node => {
-    // Draw the square (offset by current dragging)
-    context.beginPath();
-    context.rect(node.x - nodeSize / 2 + offsetX, node.y - nodeSize / 2 + offsetY, nodeSize, nodeSize);
-    context.fillStyle = node.id === activeNode ? "lightblue" : "white";
-    context.fill();
-    context.stroke();
+    if (!nodeDiv) {
+      // If the div doesn't exist, create a new one
+      nodeDiv = document.createElement('div');
+      nodeDiv.classList.add('node-text');
+      nodeDiv.style.position = 'absolute';
+      nodeDiv.style.width = `${nodeSize}px`;
+      nodeDiv.style.height = `${nodeSize}px`;
+      nodeDiv.style.overflow = 'auto'; // Make the text scrollable
+      nodeDiv.style.textAlign = 'left';
+      nodeDiv.style.padding = `${padding}px`;
+      nodeDiv.style.fontSize = '14px';
+      nodeDiv.style.lineHeight = '1.2em';
+      nodeDiv.setAttribute('data-id', node.id);
+      nodeDivs[index] = nodeDiv; // Store reference to the created div
+      document.body.appendChild(nodeDiv);
 
-    // Draw the precomputed wrapped text
-    drawWrappedText(context, node.wrappedText, node.x + offsetX, node.y + offsetY, 14);
+      // Set the text content
+      nodeDiv.innerHTML = node.wrappedText.join('<br>'); // Join wrapped text with line breaks
+    }
+
+    // Update position for the existing div
+    nodeDiv.style.top = `${node.y - nodeSize / 2 + offsetY}px`;
+    nodeDiv.style.left = `${node.x - nodeSize / 2 + offsetX}px`;
+
+    // Update node div's appearance based on active state
+    nodeDiv.style.backgroundColor = node.id === activeNode ? 'lightblue' : 'white';
+    nodeDiv.style.border = '1px solid black';
   });
 }
 
@@ -91,19 +121,6 @@ function updateXY(nodeId, newX, newY) {
   vscode.postMessage({ command: "updateXY", nodeId: nodeId, x: newX, y: newY });
 }
 
-// Text drawing helper
-function drawWrappedText(ctx, lines, x, y, lineHeight) {
-  const totalHeight = lines.length * lineHeight;
-  const startY = y - totalHeight / 2 + lineHeight / 2;
-  lines.forEach((line, index) => {
-    ctx.fillStyle = "black";
-    ctx.font = "14px sans-serif";
-    ctx.textAlign = "center";
-    ctx.textBaseline = "middle";
-    ctx.fillText(line, x, startY + index * lineHeight);
-  });
-}
-
 // Check if the point is inside a node (with offsets)
 function isInsideNode(x, y, node) {
   return (
@@ -115,48 +132,70 @@ function isInsideNode(x, y, node) {
 }
 
 // Mouse event handlers for dragging canvas and nodes
-canvas.addEventListener("mousedown", event => {
-  const [x, y] = d3.pointer(event, canvas);
-  
-  // Check if the click is inside a node (prioritize node dragging)
-  draggedNode = nodes.find(node => isInsideNode(x, y, node));
-  
-  if (draggedNode) {
-    movedNode = draggedNode.id;
-    isDraggingNode = true; // Start dragging the node
-    dragStartX = x;
-    dragStartY = y;
-    draggedNode.initialX = draggedNode.x;
-    draggedNode.initialY = draggedNode.y;
+document.body.addEventListener("mousedown", event => {
+  if (event.target && event.target.classList.contains("node-text")) {
+    // Start dragging a node
+    draggedNode = nodes.find(node => String(node.id) === event.target.dataset.id);
+    if (draggedNode) {
+      movedNode = draggedNode.id;
+      isDraggingNode = true;
+
+      dragStartX = event.clientX;
+      dragStartY = event.clientY;
+
+      draggedNode.initialX = draggedNode.x; // Store initial position *without* offset
+      draggedNode.initialY = draggedNode.y;
+
+      draggedNode.offsetXInNode = event.clientX - (draggedNode.x + offsetX - nodeSize / 2);
+      draggedNode.offsetYInNode = event.clientY - (draggedNode.y + offsetY - nodeSize / 2);
+
+      // Store the initial node position *relative to the current offset*:
+      if (event.target && event.target.classList.contains("node-text")) {
+        draggedNode.initialXWithOffset = draggedNode.x + offsetX + canvasOffsetX;
+        draggedNode.initialYWithOffset = draggedNode.y + offsetY + canvasOffsetY;
+      }
+    }
   } else {
-    isDraggingCanvas = true; // Start dragging the canvas
-    dragStartX = x;
-    dragStartY = y;
+    // Start dragging the canvas (if clicking on an empty area)
+    isDraggingCanvas = true;
+    canvasDragStartX = event.clientX;
+    canvasDragStartY = event.clientY;
+    initialOffsetX = offsetX; // Store initial offset values
+    initialOffsetY = offsetY;
   }
 });
 
-canvas.addEventListener("mousemove", event => {
+document.body.addEventListener("mousemove", event => {
   if (isDraggingCanvas) {
-    const [x, y] = d3.pointer(event, canvas);
-    const dx = x - dragStartX;
-    const dy = y - dragStartY;
-    offsetX += dx;
-    offsetY += dy;
-    dragStartX = x;
-    dragStartY = y;
-    drawNodes(); // Redraw nodes after dragging canvas
+    const dx = event.clientX - canvasDragStartX;
+    const dy = event.clientY - canvasDragStartY;
+
+    offsetX = initialOffsetX + dx; // Calculate new offset
+    offsetY = initialOffsetY + dy;
+
+    drawNodes();
   }
 
   if (isDraggingNode && draggedNode) {
-    const [x, y] = d3.pointer(event, canvas);
-    draggedNode.x = x - offsetX;
-    draggedNode.y = y - offsetY;
-    drawNodes(); // Redraw nodes after dragging a node
+    const dx = event.clientX - dragStartX;
+    const dy = event.clientY - dragStartY;
+
+    draggedNode.x = draggedNode.initialX + dx; // Update node position relative to initial
+    draggedNode.y = draggedNode.initialY + dy;
+
+    drawNodes();
+
+    //event.target.style.cursor = 'grabbing';
   }
 });
 
-canvas.addEventListener("mouseup", () => {
-  if (isDraggingNode) {
+document.body.addEventListener("mouseup", () => {
+  if (isDraggingCanvas) {
+    currentOffsetX = offsetX; // Save current offset
+    currentOffsetY = offsetY;
+    isDraggingCanvas = false;
+  }
+  if (isDraggingNode && draggedNode) {
     if (draggedNode.x !== draggedNode.initialX || draggedNode.y !== draggedNode.initialY) {
       updateXY(movedNode, draggedNode.x, draggedNode.y);
     }
@@ -167,16 +206,19 @@ canvas.addEventListener("mouseup", () => {
   movedNode = null;
 });
 
-canvas.addEventListener("mouseleave", () => {
+document.body.addEventListener("mouseleave", () => {
   isDraggingCanvas = false;
   isDraggingNode = false;
   draggedNode = null;
 });
 
 // Double-click to set active node
-canvas.addEventListener("dblclick", event => {
+document.body.addEventListener("dblclick", event => {
   const [x, y] = d3.pointer(event, canvas);
-  const clickedNode = nodes.find(node => isInsideNode(x, y, node));
+  // clickedNode usually finds the lowest id first -- which is also the lowest z-index
+  // so let's reverse it
+  const reversedNodes = [...nodes].reverse();
+  const clickedNode = reversedNodes.find(node => isInsideNode(x, y, node));
   if (clickedNode) {
     activeNode = clickedNode.id;
     changeActiveNode(clickedNode.id, clickedNode.commitId, clickedNode.branchId);
@@ -210,21 +252,10 @@ window.addEventListener('message', event => {
     if (node) {
         node.text = message.newText;
         node.wrappedText = getWrappedText(context, node.text, nodeSize - 2 * padding);
-
-        // Clear only the node's region
-        context.clearRect(node.x - nodeSize / 2 + offsetX - 1, 
-                          node.y - nodeSize / 2 + offsetY - 1, 
-                          nodeSize + 2, nodeSize + 2);
-
-        // Redraw only this node
-        context.beginPath();
-        context.rect(node.x - nodeSize / 2 + offsetX, node.y - nodeSize / 2 + offsetY, nodeSize, nodeSize);
-        context.fillStyle = node.id === activeNode ? "lightblue" : "white";
-        context.fill();
-        context.stroke();
-
-        // Redraw the text inside the node
-        drawWrappedText(context, node.wrappedText, node.x + offsetX, node.y + offsetY, 14);
+        const nodeDiv = document.querySelector(`.node-text[data-id="${node.id}"]`);
+        if (nodeDiv) {
+          nodeDiv.innerHTML = node.wrappedText.join('<br>');
+        }
     }
   }
 });
