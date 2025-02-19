@@ -208,66 +208,30 @@ export async function activate(context: vscode.ExtensionContext) {
 			gitChanged = true;
         })
     );
-}
 
-/*
-
-export function activate(context: vscode.ExtensionContext) {
-
-    const provider = new DebugViewProvider(context.extensionUri);
-
+	// This command should be used to export the users github and graph with nodes to allow rebuilding.
 	context.subscriptions.push(
-		vscode.window.registerWebviewViewProvider(DebugViewProvider.viewType, provider));
+		vscode.commands.registerCommand('extension.exportData', (treeData = {}) => {
+			if (workspaceFolder !== null) {
+				// Create a git folder inside the workspace
+				const gitCopyPath = path.join(workspaceFolder, 'git');
+				createFolder(gitCopyPath);
+				// Copy all the contents from the git repo into the new folder
+				copyFiles(globalStoragePath, gitCopyPath);
+				// Create a folder for the node data to recreate the viz
+				const vizCopyPath = path.join(workspaceFolder, 'viz');
+				saveJsonFile(vizCopyPath, treeData);
+			}
+		})
+	);
 
-    //GRAPH
-    context.subscriptions.push(
-        vscode.commands.registerCommand('extension.showD3Graph', (treeData = {}, activeNode = {}) => {
-            const panel = vscode.window.createWebviewPanel(
-                'd3Graph',
-                'D3 Graph',
-                vscode.ViewColumn.One,
-                {
-                    enableScripts: true
-                }
-            );
-
-            panel.webview.html = getWebviewContent(panel.webview, context.extensionUri, treeData, activeNode);
-
-			panel.webview.onDidReceiveMessage(
-				message => {		
-					switch (message.command) {
-						case 'updateActiveNode':
-							provider.receiveInformation("activeNode", message.activeNode);
-							//This closes the webview, but might not want it
-							//panel.dispose();
-							break;
-						case 'addNode':
-							provider.receiveInformation("addNode", message.nodeId);
-							break;
-					}
-				},
-				undefined,
-				context.subscriptions
-			);
-
-        })
-    );
-
+	// Helper command for the above command, since we need to call main.js to send the data out
 	context.subscriptions.push(
-        vscode.commands.registerCommand('extension.updateGraph', (treeData = {}, activeNode = {}) => {
-            // This assumes `panel` is defined in some scope or use appropriate method to access the panel
-            // Example of updating an existing webview panel or creating a new one
-            const panel = vscode.window.activeWebviewPanel; // Adjust as necessary
-
-            if (panel) {
-                panel.webview.postMessage({ command: 'updateGraph', treeData: treeData, activeNode: activeNode });
-            }
+		vscode.commands.registerCommand('extension.export', () => {
+			provider.receiveInformation("triggerExport", {});
         })
-    );
-
+	);
 }
-
-*/
 
 function getWebviewContent(webview: vscode.Webview, extensionUri: vscode.Uri, treeData: any, activeNode: any) {
     const scriptUri = webview.asWebviewUri(vscode.Uri.joinPath(extensionUri, 'media', 'graph.js'));
@@ -379,6 +343,12 @@ class DebugViewProvider implements vscode.WebviewViewProvider {
 						const treeData = data.treeData;
 						const activeNode = data.activeNode;
 						vscode.commands.executeCommand('extension.updateGraph', treeData, activeNode);
+						break;
+					}
+				case 'getExport':
+					{
+						const treeData = data.treeData;
+						vscode.commands.executeCommand('extension.exportData', treeData);
 						break;
 					}
 				case 'updateNodeText':
@@ -727,6 +697,62 @@ async function generateUniqueString(stringLength: number) {
     }
 
     return result;
+}
+
+// Create a folder
+async function createFolder(folderPath: string) {
+	const folderUri = vscode.Uri.file(folderPath);
+	try {
+		await vscode.workspace.fs.createDirectory(folderUri);
+	} catch (error) {
+		console.log(error);
+	}
+}
+
+// Copy files
+async function copyFiles(sourceFolderPath: string, destFolderPath: string) {
+    const sourceUri = vscode.Uri.file(sourceFolderPath);
+    const destUri = vscode.Uri.file(destFolderPath);
+
+    try {
+        // Read the contents of the source directory
+        const files = await vscode.workspace.fs.readDirectory(sourceUri);
+
+        // Loop over each file and copy it to the destination
+        for (const [fileName, fileType] of files) {
+            const sourceFilePath = path.join(sourceFolderPath, fileName);
+            const destFilePath = path.join(destFolderPath, fileName);
+
+            const sourceFileUri = vscode.Uri.file(sourceFilePath);
+            const destFileUri = vscode.Uri.file(destFilePath);
+
+            if (fileType === vscode.FileType.Directory) {
+                // If it's a directory, call copyFiles recursively
+                await createFolder(destFilePath); // Ensure the folder exists in the destination
+                await copyFiles(sourceFilePath, destFilePath); // Recursively copy the subfolder
+            } else {
+                // If it's a file, copy it
+                await vscode.workspace.fs.copy(sourceFileUri, destFileUri, { overwrite: true });
+            }
+        }
+
+    } catch (error) {
+        console.error(error);
+    }
+}
+
+// Save JSON file
+async function saveJsonFile(folderLocation: string, data: {}) {
+	await createFolder(folderLocation);
+
+	const dataFilePath = path.join(folderLocation, 'data.json');
+	const nodeJson = JSON.stringify(data, null, 2);
+
+	fs.writeFile(dataFilePath, nodeJson, 'utf8', (err) => {
+		if (err) {
+			console.log(err);
+		}
+	});
 }
 
 export function deactivate() {}

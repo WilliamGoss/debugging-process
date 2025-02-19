@@ -204,6 +204,11 @@
                     vscode.setState({root: root, nodeCount: nodeCount, activeNode: activeNode, nodes: nodes});
                     break;
                 }
+            case 'triggerExport':
+                {
+                    vscode.postMessage({ type: 'getExport', treeData: nodes });
+                    break;
+                }
         }
     });
 

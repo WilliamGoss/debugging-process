@@ -40,6 +40,10 @@
         "title": "Update Node Text"
       },
       {
+        "command": "extension.export",
+        "title": "Export Data"
+      },
+      {
         "command": "debugPanel.addColor",
         "category": "Debug Panel",
         "title": "Add Color"
