@@ -38,14 +38,14 @@ export async function activate(context: vscode.ExtensionContext) {
 	// detect changes to files
 	watcher.onDidChange((uri) => {
 		fileChanged = true;
-		provider.receiveInformation("fileChanged", "");
+		//provider.receiveInformation("fileChanged", "");
 	});
 
 	// get terminal execution and check if python was run
 	context.subscriptions.push(vscode.window.onDidStartTerminalShellExecution((event) => {
 		if (event.execution.commandLine.value.includes('python')) {
 			pythonExecuted = true;
-			provider.receiveInformation("pythonRan", "");
+			//provider.receiveInformation("pythonRan", "");
 		}
 	}));
 
@@ -74,13 +74,13 @@ export async function activate(context: vscode.ExtensionContext) {
 		//code was run before a file was ever changed
 		if (pythonExecuted && !fileChanged) {
 			pythonExecuted = false;
-			provider.receiveInformation("resetNewNodeDebug", '');
+			//provider.receiveInformation("resetNewNodeDebug", '');
 		}
 		//restoring the code triggers a fileChanged = true
 		if (restore && fileChanged) {
 			restore = false;
 			fileChanged = false;
-			provider.receiveInformation("resetNewNodeDebug", '');
+			//provider.receiveInformation("resetNewNodeDebug", '');
 		}
         if (fileChanged && pythonExecuted) {
             provider.receiveInformation("autoCreateNode", `File changed`);
@@ -90,7 +90,7 @@ export async function activate(context: vscode.ExtensionContext) {
 		if (gitChanged) {
 			fileChanged = false;
 			gitChanged = false;
-			provider.receiveInformation("resetNewNodeDebug", '');
+			//provider.receiveInformation("resetNewNodeDebug", '');
 		}
     }, 1000); // Check every second
 
@@ -235,6 +235,7 @@ export async function activate(context: vscode.ExtensionContext) {
 
 function getWebviewContent(webview: vscode.Webview, extensionUri: vscode.Uri, treeData: any, activeNode: any) {
     const scriptUri = webview.asWebviewUri(vscode.Uri.joinPath(extensionUri, 'media', 'graph.js'));
+	const imageUri = webview.asWebviewUri(vscode.Uri.joinPath(extensionUri, 'images', 'cursor.png'));
 
     return `<!DOCTYPE html>
     <html lang="en">
@@ -270,10 +271,52 @@ function getWebviewContent(webview: vscode.Webview, extensionUri: vscode.Uri, tr
 				-ms-overflow-style: none;  /* For Internet Explorer and Edge */
 				scrollbar-width: none;     /* For Firefox */
 			}
+			/* Floating buttons container style */
+			.floating-buttons {
+				position: fixed; /* Fixed to the screen */
+				bottom: 20px;    /* Distance from the bottom */
+				right: 20px;     /* Distance from the right */
+				display: flex;
+				gap: 10px;       /* Space between buttons */
+			}
+			/* Button style */
+			.floating-button {
+				width: 50px;
+				height: 50px;
+				background-color: #4CAF50;
+				color: white;
+				font-size: 20px;
+				border-radius: 50%;
+				text-align: center;
+				line-height: 50px;
+				cursor: pointer;
+				box-shadow: 0 4px 8px rgba(0, 0, 0, 0.2);
+				transition: background-color 0.3s ease;
+			}
+			.floating-button:hover {
+				background-color: #45a049;
+			}
+			/* Active button state */
+			.active {
+				background-color: #FF5733;
+			}
+			.cursor {
+				position: absolute;
+				top: 4px;
+				left: 6px;
+			}
         </style>
     </head>
     <body>
         <canvas id="canvas"></canvas>
+		<div class="floating-buttons">
+			<!-- Cursor Button with Image -->
+			<div class="floating-button" id="cursorButton">
+				<img class="cursor" src="${imageUri}" alt="Cursor" width="42" height="42" />
+			</div>
+			<!-- Pen button -->
+			<div class="floating-button" id="penButton">✏️</div>
+		</div>
         <script type="module">
 			const treeData = ${JSON.stringify(treeData)};
 			const activeNode = ${activeNode};
