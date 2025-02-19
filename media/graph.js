@@ -7,6 +7,8 @@ export function createGraph(treeData, aNode, nCount) {
 
     // Set up the canvas
     const canvas = document.getElementById("canvas");
+    const penButton = document.getElementById("penButton");
+    const cursorButton = document.getElementById("cursorButton");
     const context = canvas.getContext("2d");
     const vscode = acquireVsCodeApi();
 
@@ -236,14 +238,11 @@ document.body.addEventListener("mouseleave", () => {
 
 // Double-click to set active node
 document.body.addEventListener("dblclick", event => {
-  const [x, y] = d3.pointer(event, canvas);
-  // clickedNode usually finds the lowest id first -- which is also the lowest z-index
-  // so let's reverse it
-  const reversedNodes = [...nodes].reverse();
-  const clickedNode = reversedNodes.find(node => isInsideNode(x, y, node));
-  if (clickedNode) {
-    activeNode = clickedNode.id;
-    changeActiveNode(clickedNode.id, clickedNode.commitId, clickedNode.branchId);
+  if (event.target && event.target.classList.contains("node-text")) {
+    const reversedNodes = [...nodes].reverse();
+    let dblClickedNode = reversedNodes.find(node => String(node.id) === event.target.dataset.id);
+    activeNode = dblClickedNode.id;
+    changeActiveNode(dblClickedNode.id, dblClickedNode.commitId, dblClickedNode.branchId);
     drawNodes();
   }
 });
@@ -293,6 +292,14 @@ window.addEventListener('message', event => {
         }
     }
   }
+});
+
+penButton.addEventListener("mousedown", (event) => {
+  event.stopPropagation();
+});
+
+cursorButton.addEventListener("mousedown", (event) => {
+  event.stopPropagation();
 });
 
 // Initial setup

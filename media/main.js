@@ -50,9 +50,6 @@
 			<label for="new-exploration">Actions Taken</label>
 			<textarea id="explorationText" name="exploration" cols="40" rows="5"></textarea>
             <br/>
-            <!--
-			<button id="saveExploration" disabled>Save Exploration</button>
-            -->
             <br/>
             <br/>
             <hr/>
@@ -62,12 +59,14 @@
             <br/>
             <hr/>
             <br/>
+            <!--
             <p>Debug Stuff</p>
             <br/>
             <button id="clearState">Clear State</button>
+            -->
             <br/>
             <br/>
-            <div>
+            <div class="hidden">
                 <button id="fileChanged"></button><p> File Changed</p>
                 <br/>
                 <button id="pyRun"></button>
@@ -91,13 +90,12 @@
     /* Overall View */
     // @ts-ignore: Object is possibly 'null'.
     document.getElementById('showTreeButton').addEventListener('click', () => showTree(nodes));
-    //document.getElementById('saveExploration').addEventListener('click', () => createCommit()); 
     //update node text
     document.getElementById('explorationText').addEventListener('input', (event) => updateText(event));
 
     /* TESTING ONLY */
-    document.getElementById('clearState')?.addEventListener('click', () => emptyState());
-    document.getElementById('clearStatus')?.addEventListener('click', () => resetStatus());
+    //document.getElementById('clearState')?.addEventListener('click', () => emptyState());
+    //document.getElementById('clearStatus')?.addEventListener('click', () => resetStatus());
 
     showView(nodes);
 
