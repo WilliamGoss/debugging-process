@@ -14,6 +14,9 @@ export function createGraph(treeData, aNode, nCount) {
     let offsetX = 0;
     let offsetY = 0;
 
+    // Initial Zoom setting
+    let zoomLevel = 1;
+
     // Flags for dragging state
     let isDraggingCanvas = false;
     let isDraggingNode = false;
@@ -75,8 +78,14 @@ let nodeDivs = [];
 // Draw all nodes
 function drawNodes() {
 
+  context.setTransform(zoomLevel, 0, 0, zoomLevel, 0, 0);
+
   // Create nodes only once
   nodes.forEach((node, index) => {
+    // EXPERIMENTAL
+    let xPos = (node.x - nodeSize / 2) + offsetX;
+    let yPos = (node.y - nodeSize / 2) + offsetY;
+
     // Check if the div for the node already exists
     let nodeDiv = nodeDivs[index];
 
@@ -90,7 +99,7 @@ function drawNodes() {
       nodeDiv.style.overflow = 'auto'; // Make the text scrollable
       nodeDiv.style.textAlign = 'left';
       nodeDiv.style.padding = `${padding}px`;
-      nodeDiv.style.fontSize = '14px';
+      //nodeDiv.style.fontSize = '14px';
       nodeDiv.style.lineHeight = '1.2em';
       nodeDiv.setAttribute('data-id', node.id);
       nodeDivs[index] = nodeDiv; // Store reference to the created div
@@ -100,9 +109,22 @@ function drawNodes() {
       nodeDiv.innerHTML = node.wrappedText.join('<br>'); // Join wrapped text with line breaks
     }
 
+    // Apply zoom to the node div position
+    nodeDiv.style.top = `${yPos * zoomLevel + offsetY}px`;
+    nodeDiv.style.left = `${xPos * zoomLevel + offsetX}px`;
+
+    // Adjust the size of the node div based on zoom level
+    const scaledNodeSize = nodeSize * zoomLevel;
+    nodeDiv.style.width = `${scaledNodeSize}px`;
+    nodeDiv.style.height = `${scaledNodeSize}px`;
+
+    // Scale the font size based on zoom level
+    const scaledFontSize = 14 * zoomLevel; // Adjust the base font size (14px) as needed
+    nodeDiv.style.fontSize = `${scaledFontSize}px`;
+
     // Update position for the existing div
-    nodeDiv.style.top = `${node.y - nodeSize / 2 + offsetY}px`;
-    nodeDiv.style.left = `${node.x - nodeSize / 2 + offsetX}px`;
+    //nodeDiv.style.top = `${node.y - nodeSize / 2 + offsetY}px`;
+    //nodeDiv.style.left = `${node.x - nodeSize / 2 + offsetX}px`;
 
     // Update node div's appearance based on active state
     nodeDiv.style.backgroundColor = node.id === activeNode ? 'lightblue' : 'white';
@@ -224,6 +246,19 @@ document.body.addEventListener("dblclick", event => {
     changeActiveNode(clickedNode.id, clickedNode.commitId, clickedNode.branchId);
     drawNodes();
   }
+});
+
+// Zooming with mouse wheel
+document.body.addEventListener("wheel", (event) => {
+  const zoomSpeed = 0.1;
+  if (event.deltaY < 0) {
+    //Scroll up (zoom in)
+    zoomLevel += zoomSpeed;
+  } else {
+    zoomLevel = Math.max(zoomLevel - zoomSpeed, 0.1);
+  }
+  canvas.style.transform = `scale(${zoomLevel})`;
+  drawNodes();
 });
 
 // Listen for window resize and adjust the canvas size
