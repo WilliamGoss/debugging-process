@@ -254,7 +254,6 @@ function getWebviewContent(webview: vscode.Webview, extensionUri: vscode.Uri, tr
                 border: 1px solid black;
             }
 			canvas {
-				border: 1px solid black;
 				display: block;
 				margin: auto;
 			}
