@@ -43,6 +43,7 @@ export async function activate(context: vscode.ExtensionContext) {
 
 	// get terminal execution and check if python was run
 	context.subscriptions.push(vscode.window.onDidStartTerminalShellExecution((event) => {
+		console.log(event);
 		if (event.execution.commandLine.value.includes('python')) {
 			pythonExecuted = true;
 			//provider.receiveInformation("pythonRan", "");
