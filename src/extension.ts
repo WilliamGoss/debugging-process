@@ -228,6 +228,7 @@ export async function activate(context: vscode.ExtensionContext) {
 				// Create a folder for the node data to recreate the viz
 				const vizCopyPath = path.join(workspaceFolder, 'viz');
 				saveJsonFile(vizCopyPath, treeData);
+				clearDirectory(globalStoragePath);
 			}
 		})
 	);
@@ -492,7 +493,7 @@ class DebugViewProvider implements vscode.WebviewViewProvider {
 					{
 						let directoryPath = this._globalStorage.path;
 						//exec(`rm -rf ${directoryPath}`);
-						this.clearDirectory(directoryPath);
+						clearDirectory(directoryPath);
 						break;
 					}
 				case 'createCommit':
@@ -590,50 +591,6 @@ class DebugViewProvider implements vscode.WebviewViewProvider {
 		for (const filepath in backup) {
 			await fs.promises.writeFile(`${filepath}`, backup[filepath], 'utf8');
 		}
-	}
-
-	//Delete functionality to work cross platform
-	private clearDirectory(dirPath: string) {
-		// Check for paths on Windows and remove the leading slash if it is Windows
-		if (process.platform === 'win32' && dirPath.startsWith('/')) {
-			dirPath = dirPath.substring(1); // Remove the leading slash for Windows
-		}
-		fs.readdir(dirPath, (err, files) => {
-			if (err) {
-				console.error(`Error reading directory: ${err}`);
-				return;
-			}
-
-			const deletePromises: Promise<void>[] = files.map(file => {
-				const filePath = path.join(dirPath, file);
-				return new Promise((resolve, reject) => {
-					fs.stat(filePath, (err, stats) => {
-						if (err) {
-							return reject(err);
-						}
-						if (stats.isDirectory()) {
-							fs.rm(filePath, { recursive: true }, (err) => {
-								if (err) { return reject(err); }
-								resolve();
-							});
-						} else {
-							fs.unlink(filePath, (err) => {
-								if (err) { return reject(err); }
-								resolve();
-							});
-						}
-					});
-				});
-			});
-
-			Promise.all(deletePromises)
-				.then(() => {
-					console.log(`Directory contents removed successfully`);
-				})
-				.catch(error => {
-					console.error(`Error deleting files: ${error}`);
-				});
-		});
 	}
 
 	public receiveInformation(command: any, data: any) {
@@ -833,6 +790,50 @@ async function saveJsonFile(folderLocation: string, data: {}) {
 		if (err) {
 			console.log(err);
 		}
+	});
+}
+
+//Delete functionality to work cross platform
+function clearDirectory(dirPath: string) {
+	// Check for paths on Windows and remove the leading slash if it is Windows
+	if (process.platform === 'win32' && dirPath.startsWith('/')) {
+		dirPath = dirPath.substring(1); // Remove the leading slash for Windows
+	}
+	fs.readdir(dirPath, (err, files) => {
+		if (err) {
+			console.error(`Error reading directory: ${err}`);
+			return;
+		}
+
+		const deletePromises: Promise<void>[] = files.map(file => {
+			const filePath = path.join(dirPath, file);
+			return new Promise((resolve, reject) => {
+				fs.stat(filePath, (err, stats) => {
+					if (err) {
+						return reject(err);
+					}
+					if (stats.isDirectory()) {
+						fs.rm(filePath, { recursive: true }, (err) => {
+							if (err) { return reject(err); }
+							resolve();
+						});
+					} else {
+						fs.unlink(filePath, (err) => {
+							if (err) { return reject(err); }
+							resolve();
+						});
+					}
+				});
+			});
+		});
+
+		Promise.all(deletePromises)
+			.then(() => {
+				console.log(`Directory contents removed successfully`);
+			})
+			.catch(error => {
+				console.error(`Error deleting files: ${error}`);
+			});
 	});
 }
 
