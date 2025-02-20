@@ -39,6 +39,10 @@ export function createGraph(treeData, aNode, nCount) {
     let currentOffsetY = 0;
     let initialOffsetX = 0;
     let initialOffsetY = 0;
+    // Drawing state
+    let isDrawing = false;
+    let isMousePressed = false;
+    let drawingPaths = [];
 
     // Function to set canvas size to the window size
     function resizeCanvas() {
@@ -84,12 +88,10 @@ let nodeDivs = [];
 
 // Draw all nodes
 function drawNodes() {
-
-  context.setTransform(zoomLevel, 0, 0, zoomLevel, 0, 0);
+  //context.setTransform(zoomLevel, 0, 0, zoomLevel, 0, 0);
 
   // Create nodes only once
   nodes.forEach((node, index) => {
-    // EXPERIMENTAL
     let xPos = (node.x - nodeSize / 2) + offsetX;
     let yPos = (node.y - nodeSize / 2) + offsetY;
 
@@ -123,10 +125,6 @@ function drawNodes() {
       nodeDiv.style.display = 'block'; // Show the node if visible is true or not defined
     }
 
-    // Apply zoom to the node div position
-    nodeDiv.style.top = `${yPos * zoomLevel + offsetY}px`;
-    nodeDiv.style.left = `${xPos * zoomLevel + offsetX}px`;
-
     // Adjust the size of the node div based on zoom level
     const scaledNodeSize = nodeSize * zoomLevel;
     nodeDiv.style.width = `${scaledNodeSize}px`;
@@ -137,13 +135,27 @@ function drawNodes() {
     nodeDiv.style.fontSize = `${scaledFontSize}px`;
 
     // Update position for the existing div
-    //nodeDiv.style.top = `${node.y - nodeSize / 2 + offsetY}px`;
-    //nodeDiv.style.left = `${node.x - nodeSize / 2 + offsetX}px`;
+    nodeDiv.style.top = `${node.y - nodeSize / 2 + offsetY}px`;
+    nodeDiv.style.left = `${node.x - nodeSize / 2 + offsetX}px`;
 
     // Update node div's appearance based on active state
     nodeDiv.style.backgroundColor = node.id === activeNode ? 'lightblue' : 'white';
     nodeDiv.style.border = '1px solid black';
   });
+}
+
+function drawPaths() {
+  context.setTransform(zoomLevel, 0, 0, zoomLevel, offsetX, offsetY); // Apply offset to canvas transform
+  context.lineWidth = 1 / zoomLevel; // Scale line width!  Crucial!
+    drawingPaths.forEach(path => {
+      console.log(path);
+        context.beginPath();
+        context.moveTo(path[0].x, path[0].y); // No offset here
+        path.forEach(point => {
+            context.lineTo(point.x, point.y); // No offset here
+        });
+        context.stroke();
+    });
 }
 
 //active node helper function
@@ -175,6 +187,11 @@ function isInsideNode(x, y, node) {
 // Mouse event handlers for dragging canvas and nodes
 document.body.addEventListener("mousedown", event => {
   if (event.button === 0) {
+    if (isDrawing) {
+      isMousePressed = true;
+      startDrawing(event);
+      return;
+    }
     if (event.target && event.target.classList.contains("node-text")) {
       // Start dragging a node
       draggedNode = nodes.find(node => String(node.id) === event.target.dataset.id);
@@ -209,6 +226,10 @@ document.body.addEventListener("mousedown", event => {
 });
 
 document.body.addEventListener("mousemove", event => {
+  if (isDrawing && isMousePressed) {
+    draw(event);
+    return;
+  }
   if (isDraggingCanvas) {
     const dx = event.clientX - canvasDragStartX;
     const dy = event.clientY - canvasDragStartY;
@@ -216,6 +237,9 @@ document.body.addEventListener("mousemove", event => {
     offsetX = initialOffsetX + dx; // Calculate new offset
     offsetY = initialOffsetY + dy;
 
+    context.clearRect(0, 0, canvas.width, canvas.height);
+    //drawNodes();
+    drawPaths();
     drawNodes();
   }
 
@@ -233,6 +257,11 @@ document.body.addEventListener("mousemove", event => {
 });
 
 document.body.addEventListener("mouseup", () => {
+  if (isDrawing) {
+    stopDrawing();
+    isMousePressed = false;
+    return;
+  }
   if (isDraggingCanvas) {
     currentOffsetX = offsetX; // Save current offset
     currentOffsetY = offsetY;
@@ -247,6 +276,7 @@ document.body.addEventListener("mouseup", () => {
   isDraggingNode = false;
   draggedNode = null;
   movedNode = null;
+  isMousePressed = false;
 });
 
 document.body.addEventListener("mouseleave", () => {
@@ -321,6 +351,63 @@ document.body.addEventListener("contextmenu", (event) => {
     });
   }
 });
+
+penButton.addEventListener("click", () => {
+  isDrawing = !isDrawing;
+
+  if (isDrawing) {
+    penButton.style.backgroundColor = 'lightgrey';
+  } else {
+    penButton.style.backgroundColor = '';
+  }
+});
+
+function startDrawing(event) {
+    /*
+    context.beginPath();
+    const startX = event.clientX - canvas.offsetLeft + offsetX;
+    const startY = event.clientY - canvas.offsetTop + offsetY;
+  
+    drawingPaths.push([{ x: startX, y: startY }]);
+    //TODO maybe update?
+    context.moveTo(event.clientX - canvas.offsetLeft, event.clientY - canvas.offsetTop);
+    event.preventDefault();
+    */
+    context.beginPath();
+
+    const canvasX = event.clientX - canvas.offsetLeft - offsetX; // Subtract offset here!
+    const canvasY = event.clientY - canvas.offsetTop - offsetY;   // Subtract offset here!
+
+    drawingPaths.push([{ x: canvasX, y: canvasY }]);
+
+    context.moveTo(canvasX, canvasY);
+    event.preventDefault();
+}
+
+function draw(event) {
+  /*
+  const currentX = event.clientX - canvas.offsetLeft + offsetX;
+  const currentY = event.clientY - canvas.offsetTop + offsetY;
+
+  // Add current drawing point to the last path
+  drawingPaths[drawingPaths.length - 1].push({ x: currentX, y: currentY });
+  context.lineTo(event.clientX - canvas.offsetLeft, event.clientY - canvas.offsetTop);
+  context.stroke();
+  event.preventDefault();
+  */
+  const canvasX = event.clientX - canvas.offsetLeft - offsetX; // Subtract offset here!
+    const canvasY = event.clientY - canvas.offsetTop - offsetY;   // Subtract offset here!
+
+    drawingPaths[drawingPaths.length - 1].push({ x: canvasX, y: canvasY });
+
+    context.lineTo(event.clientX - canvas.offsetLeft, event.clientY - canvas.offsetTop);
+    context.stroke();
+    event.preventDefault();
+}
+
+function stopDrawing() {
+  context.closePath();
+}
 
 // Listen for window resize and adjust the canvas size
 window.addEventListener("resize", resizeCanvas);

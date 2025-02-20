@@ -301,6 +301,7 @@ function getWebviewContent(webview: vscode.Webview, extensionUri: vscode.Uri, tr
 				cursor: pointer;
 				box-shadow: 0 4px 8px rgba(0, 0, 0, 0.2);
 				transition: background-color 0.3s ease;
+				display: none;
 			}
 			.floating-button:hover {
 				background-color: #45a049;
