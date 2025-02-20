@@ -201,8 +201,8 @@ document.body.addEventListener("mousemove", event => {
   }
 
   if (isDraggingNode && draggedNode) {
-    const dx = event.clientX - dragStartX;
-    const dy = event.clientY - dragStartY;
+    const dx = (event.clientX - dragStartX) / zoomLevel;
+    const dy = (event.clientY - dragStartY) / zoomLevel;
 
     draggedNode.x = draggedNode.initialX + dx; // Update node position relative to initial
     draggedNode.y = draggedNode.initialY + dy;
