@@ -204,7 +204,17 @@
                 }
             case 'triggerExport':
                 {
+                    // Export the data
                     vscode.postMessage({ type: 'getExport', treeData: nodes });
+                    // Reset the data
+                    vscode.setState({root: -1, nodeCount: 0, activeNode: 0, nodes: {}});
+                    nodes = {};
+                    nodeCount = 0;
+                    activeNode = 0;
+                    root = -1;
+                    // Change view back to initial
+                    showView(nodes);
+                    // Close visual if it's open
                     break;
                 }
         }

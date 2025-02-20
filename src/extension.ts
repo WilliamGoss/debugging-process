@@ -214,6 +214,9 @@ export async function activate(context: vscode.ExtensionContext) {
 	context.subscriptions.push(
 		vscode.commands.registerCommand('extension.exportData', (treeData = {}) => {
 			if (workspaceFolder !== null) {
+				if (graphView) {
+					graphView.dispose();
+				}
 				// Create a git folder inside the workspace
 				const gitCopyPath = path.join(workspaceFolder, 'git');
 				createFolder(gitCopyPath);
