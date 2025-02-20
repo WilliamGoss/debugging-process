@@ -157,6 +157,9 @@ export async function activate(context: vscode.ExtensionContext) {
 						case 'updateXY':
 							provider.receiveInformation("updateXY", {nodeId: message.nodeId, x: message.x, y: message.y});
 							break;
+						case 'hideNode':
+							provider.receiveInformation("hideNode", message.nodeId);
+							break;
                     }
                 },
                 undefined,
@@ -309,6 +312,31 @@ function getWebviewContent(webview: vscode.Webview, extensionUri: vscode.Uri, tr
 				top: 4px;
 				left: 6px;
 			}
+			/* Styling for the custom context menu */
+			#contextMenu {
+				display: none;
+				position: absolute;
+				background-color: white;
+				border: 1px solid #ccc;
+				box-shadow: 0 2px 10px rgba(0, 0, 0, 0.1);
+				z-index: 1000;
+			}
+
+			#contextMenu ul {
+				list-style-type: none;
+				margin: 0;
+				padding: 5px;
+			}
+
+			#contextMenu ul li {
+				padding: 8px;
+				cursor: pointer;
+				color: #333;
+			}
+
+			#contextMenu ul li:hover {
+				background-color: #f0f0f0;
+			}
         </style>
     </head>
     <body>
@@ -320,6 +348,12 @@ function getWebviewContent(webview: vscode.Webview, extensionUri: vscode.Uri, tr
 			</div>
 			<!-- Pen button -->
 			<div class="floating-button" id="penButton">✏️</div>
+		</div>
+		<!-- Custom context menu -->
+		<div id="contextMenu">
+			<ul>
+				<li id="deleteOption">Delete</li>
+			</ul>
 		</div>
         <script type="module">
 			const treeData = ${JSON.stringify(treeData)};
