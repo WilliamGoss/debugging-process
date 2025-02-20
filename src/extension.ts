@@ -285,6 +285,7 @@ function getWebviewContent(webview: vscode.Webview, extensionUri: vscode.Uri, tr
 				right: 20px;     /* Distance from the right */
 				display: flex;
 				gap: 10px;       /* Space between buttons */
+				user-select: none; /* Stop highlighting when dragging nodes or selection the canvas */
 			}
 			/* Button style */
 			.floating-button {
