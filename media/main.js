@@ -130,7 +130,7 @@
                 }
             case 'addNode':
                 {
-                    let newNode = {text: "New Node", id: nodeCount, commitId: "", x: 0, y: 0, children: []};
+                    let newNode = {text: "New Node", id: nodeCount, commitId: "", x: 0, y: 0, children: [], visible: true};
                     nodes[nodeCount] = newNode;
                     nodes[message.data].children.push(nodeCount);
                     nodeCount = nodeCount + 1;
@@ -151,7 +151,7 @@
                 }
             case 'autoCreateNode':
                 {
-                    let newNode = {text: message.data, id: nodeCount, commitId: "", branchId: "", x: nodes[activeNode].x + 50, y: nodes[activeNode].y + 50, children: []};
+                    let newNode = {text: message.data, id: nodeCount, commitId: "", branchId: "", x: nodes[activeNode].x + 50, y: nodes[activeNode].y + 50, children: [], visible: true};
                     //change active node to the new node
                     let newActiveNode = nodeCount;
                     nodes[nodeCount] = newNode;
@@ -202,6 +202,14 @@
                     vscode.setState({root: root, nodeCount: nodeCount, activeNode: activeNode, nodes: nodes});
                     break;
                 }
+
+            case 'hideNode':
+                {
+                    const nodeToUpdate = message.data;
+                    nodes[nodeToUpdate].visible = false;
+                    vscode.setState({root: root, nodeCount: nodeCount, activeNode: activeNode, nodes: nodes});
+                    break;
+                }
             case 'triggerExport':
                 {
                     // Export the data
@@ -224,7 +232,7 @@
         const textAreaObject = document.querySelector('#view1 textarea');
         const userIssueText = textAreaObject.value;
         let newNodes = {};
-        newNodes[0] = {text: userIssueText, id: 0, commitId: "", branchId: "", x: 250, y: 250, children: []};
+        newNodes[0] = {text: userIssueText, id: 0, commitId: "", branchId: "", x: 250, y: 250, children: [], visible: true};
         nodeCount = nodeCount + 1;
         //update the local global variables: nodes, activeNode, root
         nodes = newNodes;

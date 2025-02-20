@@ -7,8 +7,13 @@ export function createGraph(treeData, aNode, nCount) {
 
     // Set up the canvas
     const canvas = document.getElementById("canvas");
+    // Pen and select functionality
     const penButton = document.getElementById("penButton");
     const cursorButton = document.getElementById("cursorButton");
+    //Right click functionality
+    const contextMenu = document.getElementById('contextMenu');
+    const deleteOption = document.getElementById('deleteOption');
+
     const context = canvas.getContext("2d");
     const vscode = acquireVsCodeApi();
 
@@ -111,6 +116,13 @@ function drawNodes() {
       nodeDiv.innerHTML = node.wrappedText.join('<br>'); // Join wrapped text with line breaks
     }
 
+    // Check for visibility (defaults to true if not set)
+    if (node.hasOwnProperty('visible') && !node.visible) {
+      nodeDiv.style.display = 'none'; // Hide the node if visible is false
+    } else {
+      nodeDiv.style.display = 'block'; // Show the node if visible is true or not defined
+    }
+
     // Apply zoom to the node div position
     nodeDiv.style.top = `${yPos * zoomLevel + offsetY}px`;
     nodeDiv.style.left = `${xPos * zoomLevel + offsetX}px`;
@@ -145,6 +157,11 @@ function updateXY(nodeId, newX, newY) {
   vscode.postMessage({ command: "updateXY", nodeId: nodeId, x: newX, y: newY });
 }
 
+//"delete" the node/hide it from the user
+function hideNode(nodeId) {
+  vscode.postMessage({ command: "hideNode", nodeId });
+}
+
 // Check if the point is inside a node (with offsets)
 function isInsideNode(x, y, node) {
   return (
@@ -157,35 +174,37 @@ function isInsideNode(x, y, node) {
 
 // Mouse event handlers for dragging canvas and nodes
 document.body.addEventListener("mousedown", event => {
-  if (event.target && event.target.classList.contains("node-text")) {
-    // Start dragging a node
-    draggedNode = nodes.find(node => String(node.id) === event.target.dataset.id);
-    if (draggedNode) {
-      movedNode = draggedNode.id;
-      isDraggingNode = true;
+  if (event.button === 0) {
+    if (event.target && event.target.classList.contains("node-text")) {
+      // Start dragging a node
+      draggedNode = nodes.find(node => String(node.id) === event.target.dataset.id);
+      if (draggedNode) {
+        movedNode = draggedNode.id;
+        isDraggingNode = true;
 
-      dragStartX = event.clientX;
-      dragStartY = event.clientY;
+        dragStartX = event.clientX;
+        dragStartY = event.clientY;
 
-      draggedNode.initialX = draggedNode.x; // Store initial position *without* offset
-      draggedNode.initialY = draggedNode.y;
+        draggedNode.initialX = draggedNode.x; // Store initial position *without* offset
+        draggedNode.initialY = draggedNode.y;
 
-      draggedNode.offsetXInNode = event.clientX - (draggedNode.x + offsetX - nodeSize / 2);
-      draggedNode.offsetYInNode = event.clientY - (draggedNode.y + offsetY - nodeSize / 2);
+        draggedNode.offsetXInNode = event.clientX - (draggedNode.x + offsetX - nodeSize / 2);
+        draggedNode.offsetYInNode = event.clientY - (draggedNode.y + offsetY - nodeSize / 2);
 
-      // Store the initial node position *relative to the current offset*:
-      if (event.target && event.target.classList.contains("node-text")) {
-        draggedNode.initialXWithOffset = draggedNode.x + offsetX + canvasOffsetX;
-        draggedNode.initialYWithOffset = draggedNode.y + offsetY + canvasOffsetY;
+        // Store the initial node position *relative to the current offset*:
+        if (event.target && event.target.classList.contains("node-text")) {
+          draggedNode.initialXWithOffset = draggedNode.x + offsetX + canvasOffsetX;
+          draggedNode.initialYWithOffset = draggedNode.y + offsetY + canvasOffsetY;
+        }
       }
+    } else {
+      // Start dragging the canvas (if clicking on an empty area)
+      isDraggingCanvas = true;
+      canvasDragStartX = event.clientX;
+      canvasDragStartY = event.clientY;
+      initialOffsetX = offsetX; // Store initial offset values
+      initialOffsetY = offsetY;
     }
-  } else {
-    // Start dragging the canvas (if clicking on an empty area)
-    isDraggingCanvas = true;
-    canvasDragStartX = event.clientX;
-    canvasDragStartY = event.clientY;
-    initialOffsetX = offsetX; // Store initial offset values
-    initialOffsetY = offsetY;
   }
 });
 
@@ -258,6 +277,49 @@ document.body.addEventListener("wheel", (event) => {
   }
   canvas.style.transform = `scale(${zoomLevel})`;
   drawNodes();
+});
+
+// Right click functionality on the nodes
+document.body.addEventListener("contextmenu", (event) => {
+  event.preventDefault();
+
+  // Close the context menu if right-clicking on the canvas
+  if (event.target === canvas) {
+    contextMenu.style.display = 'none'; // Hide the custom context menu
+    return; // Exit early
+  }
+
+  // Close the context menu if right-clicking on the activeNode
+  if (event.target.dataset.id === String(activeNode)) {
+    contextMenu.style.display = 'none';
+    return;
+  }
+
+  if (event.target && event.target.classList.contains("node-text") && event.target.dataset.id !== String(activeNode)) {
+    let targetNode = event.target;
+    // Position the context menu at the mouse coordinates
+    const x = event.clientX;
+    const y = event.clientY;
+    contextMenu.style.left = `${x}px`;
+    contextMenu.style.top = `${y}px`;
+    contextMenu.style.display = 'block'; // Show the custom context menu
+
+    // Handle click on "Delete"
+    deleteOption.addEventListener('click', () => {
+      if (targetNode) {
+        targetNode.remove(); // Remove the node from the canvas
+        hideNode(targetNode.dataset.id);
+      }
+      contextMenu.style.display = 'none'; // Hide the custom context menu
+    });
+
+    // Hide the custom context menu when clicking anywhere else
+    document.addEventListener('click', (event) => {
+      if (!contextMenu.contains(event.target)) {
+        contextMenu.style.display = 'none'; // Hide context menu when clicking outside
+      }
+    });
+  }
 });
 
 // Listen for window resize and adjust the canvas size
