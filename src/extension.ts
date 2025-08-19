@@ -2,6 +2,9 @@ import * as vscode from 'vscode';
 import * as git from "isomorphic-git";
 import fs from 'fs';
 import * as path from 'path';
+import OpenAI from "openai";
+import { diffLines } from 'diff';
+//import { exec } from "child_process";
 
 let graphView: vscode.WebviewPanel | undefined = undefined;
 
@@ -84,7 +87,19 @@ export async function activate(context: vscode.ExtensionContext) {
 			//provider.receiveInformation("resetNewNodeDebug", '');
 		}
         if (fileChanged && pythonExecuted) {
-            provider.receiveInformation("autoCreateNode", `File changed`);
+			const editor = vscode.window.activeTextEditor;
+			if (!editor) {
+				vscode.window.showErrorMessage("No active editor.");
+				return;
+			}
+
+			const filePath = editor.document.fileName;
+
+			if (!filePath.endsWith('.py')) {
+				vscode.window.showErrorMessage("Active file is not a Python file.");
+				return;
+			}
+			const runOutput = runPythonScript(filePath, provider);
             fileChanged = false;
             pythonExecuted = false;
         }
@@ -205,6 +220,13 @@ export async function activate(context: vscode.ExtensionContext) {
             }
         })
     );
+
+	// Register the 'updateSummary' command*
+	context.subscriptions.push(
+		vscode.commands.registerCommand('extension.updateSummary', (nodeId: number, changeLog: string) => {
+			provider.receiveInformation("updateSummary", {nodeId: nodeId, changeLog: changeLog});
+		})
+	);
 
 	// Debug to figure out why git is broken
 	context.subscriptions.push(
@@ -558,6 +580,21 @@ class DebugViewProvider implements vscode.WebviewViewProvider {
 						//0 for the root node, but could change eventually if we allow multiple roots (issues)
 						vscode.commands.executeCommand('extension.resetCodeChange');
 						vscode.commands.executeCommand('extension.attachCommit', activeNode, log[0].oid, branch);
+						if (workspaceFolder !== null) {
+							const changeLog = await summarizeChanges(data.parentCommit, log[0].oid, workspaceFolder, gitLoc);
+							vscode.commands.executeCommand('extension.updateSummary', activeNode, changeLog);
+							vscode.commands.executeCommand('extension.updateNodeText', activeNode, changeLog);
+						}
+						break;
+					}
+				case "newNodeCreated":
+					{
+						//TODO DELETE THIS!!!
+						console.log(data);
+						//const changeLog = await summarizeChanges("A B C - C B A");
+						//vscode.commands.executeCommand('extension.updateSummary', data.nodeId, changeLog);
+						//vscode.commands.executeCommand('extension.updateNodeText', data.nodeId, changeLog);
+						break;
 					}
 			}
 		});
@@ -836,6 +873,69 @@ function clearDirectory(dirPath: string) {
 				console.error(`Error deleting files: ${error}`);
 			});
 	});
+}
+
+function runPythonScript(filePath: string, provider: DebugViewProvider) {
+	const { exec } = require("node:child_process");
+
+	const output = vscode.window.createOutputChannel("Debugger");
+	output.clear();
+	output.show(true);
+  
+	exec(`python3 "${filePath}"`, (error: any, stdout: any, stderr: any) => {
+	  if (stdout) { output.append(stdout); provider.receiveInformation("autoCreateNode", stdout);}
+	  if (stderr) { output.append(stderr); provider.receiveInformation("autoCreateNode", stderr); }
+	  if (error) { output.append(`Error: ${error.message}`); }
+	});
+
+  }
+
+//Make this an API call on a server if there is time... 
+async function summarizeChanges(parentCommit: string, newCommit: string, dir: string, gdir: string) {
+	//const apiKey = ""
+
+	const files = fs.readdirSync(dir);
+	const pyFiles = files.filter( f => f.endsWith('.py'));
+	const absFilePath = path.join(dir, pyFiles[0]).substring(1);
+	const filepath = pyFiles[0];
+
+	const { blob: blob1 } = await git.readBlob({ 
+		fs, 
+		dir: dir, 
+		gitdir: gdir, 
+		oid: parentCommit, 
+		filepath 
+	});
+	const text1 = new TextDecoder().decode(blob1);
+	
+	const { blob: blob2 } = await git.readBlob({ 
+		fs, 
+		dir, 
+		gitdir: gdir,
+		oid: newCommit,
+		 filepath 
+	});
+	const text2 = new TextDecoder().decode(blob2);
+
+	const diffs = diffLines(text1, text2);
+	
+	const diffString = JSON.stringify(diffs);
+	/*
+	const client = new OpenAI({ apiKey});
+
+	const query = await client.chat.completions.create({
+		model: "gpt-4o-mini",
+		messages: [
+			{ role: "system", content: "You are a helpful assistant that summarizes code diffs in a single sentence. Keep all of your responses limited to one sentence and less than 40 words. I will pass you an object that contains the original code and changes to the code. Use that object to determine what changes were made."},
+			{ role: "user", content: `Summarize these code changes: \n${diffString}` }
+		]
+	});
+
+	const summary = query.choices[0].message?.content ?? "No summary available.";
+	*/
+	const summary = "tester";
+	//Update the corresponding node's text.
+	return summary;
 }
 
 export function deactivate() {}

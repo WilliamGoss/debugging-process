@@ -11,7 +11,7 @@
     let nodeCount;
     let activeNode;
     let root;
-    const oldState = vscode.getState() || { nodesData: {root: 0, nodeCount: 0, activeNode: 0, nodes: {}} };
+    const oldState = vscode.getState() || { nodesData: { root: 0, nodeCount: 0, activeNode: 0, nodes: {} } };
     if ("nodes" in oldState) {
         nodes = oldState.nodes;
         nodeCount = oldState.nodeCount;
@@ -19,7 +19,7 @@
         root = oldState.root;
     } else {
         //stale data
-        vscode.setState({root: -1, nodeCount: nodeCount, activeNode: activeNode, nodes: {}});
+        vscode.setState({ root: -1, nodeCount: nodeCount, activeNode: activeNode, nodes: {} });
         nodes = [];
         nodeCount = 0;
         activeNode = 0;
@@ -28,7 +28,7 @@
     //const oldState = { treeData: {}, nodeCount: 0, activeNode: 0 };
 
     let viewId = '';
-    
+
     document.body.innerHTML = `
         <div id="view0" class="hidden">
             <p> Please select a workspace to continue. </p>
@@ -86,7 +86,7 @@
     updateExplorationText();
 
     // @ts-ignore: Object is possibly 'null'.
-    document.getElementById('startIssue').addEventListener('click', () => {showView('view2'); createNewIssue();});
+    document.getElementById('startIssue').addEventListener('click', () => { showView('view2'); createNewIssue(); });
     /* Overall View */
     // @ts-ignore: Object is possibly 'null'.
     document.getElementById('showTreeButton').addEventListener('click', () => showTree(nodes));
@@ -106,7 +106,7 @@
         else if (Object.keys(nodes).length === 0) {
             viewId = 'view1';
         } else {
-            viewId= 'view2';
+            viewId = 'view2';
         }
         const views = ['view0', 'view1', 'view2'];
         views.forEach(view => {
@@ -115,7 +115,7 @@
             // @ts-ignore: Object is possibly 'null'.
             document.getElementById(view).classList.toggle('hidden', view !== viewId);
         });
-    }  
+    }
 
     // Handle messages sent from the extension to the webview
     window.addEventListener('message', event => {
@@ -124,17 +124,17 @@
             case 'activeNode':
                 {
                     activeNode = message.data;
-                    vscode.setState({root: root, nodeCount: nodeCount, activeNode: message.data, nodes: nodes});
+                    vscode.setState({ root: root, nodeCount: nodeCount, activeNode: message.data, nodes: nodes });
                     updateExplorationText();
                     break;
                 }
             case 'addNode':
                 {
-                    let newNode = {text: "New Node", id: nodeCount, commitId: "", x: 0, y: 0, children: [], visible: true};
+                    let newNode = { text: "New Node", id: nodeCount, commitId: "", x: 0, y: 0, children: [], visible: true };
                     nodes[nodeCount] = newNode;
                     nodes[message.data].children.push(nodeCount);
                     nodeCount = nodeCount + 1;
-                    vscode.setState({root: root, nodeCount: nodeCount, activeNode: activeNode, nodes: nodes});
+                    vscode.setState({ root: root, nodeCount: nodeCount, activeNode: activeNode, nodes: nodes });
                     vscode.postMessage({ type: 'updateGraph', command: "showD3Graph", treeData: nodes, activeNode: activeNode });
                     break;
                 }
@@ -145,22 +145,26 @@
                     const branchId = message.data.branchId;
                     nodes[nodeToUpdate].commitId = commitId;
                     nodes[nodeToUpdate].branchId = branchId;
-                    vscode.setState({root: root, nodeCount: nodeCount, activeNode: activeNode, nodes: nodes});
+                    vscode.setState({ root: root, nodeCount: nodeCount, activeNode: activeNode, nodes: nodes });
                     vscode.postMessage({ type: 'updateGraph', command: "showD3Graph", treeData: nodes, activeNode: activeNode });
                     break;
                 }
             case 'autoCreateNode':
                 {
-                    let newNode = {text: message.data, id: nodeCount, commitId: "", branchId: "", x: nodes[activeNode].x + 50, y: nodes[activeNode].y + 50, children: [], visible: true};
+                    // if viewId is blank or not set to view2, it means a bug hasn't been declared yet
+                    // it should return as we do not want nodes created until a bug is declared
+                    if (viewId === '' || viewId !== "view2") { return; }
+                    let newNode = { text: message.data, id: nodeCount, commitId: "", branchId: "", x: nodes[activeNode].x + 50, y: nodes[activeNode].y + 50, children: [], visible: true };
                     //change active node to the new node
                     let newActiveNode = nodeCount;
                     nodes[nodeCount] = newNode;
+                    let parentCommit = nodes[activeNode].commitId;
                     nodes[activeNode].children.push(nodeCount);
                     let childCheck = nodes[activeNode].children.length;
                     let parentBranch = nodes[activeNode].branchId;
                     nodeCount = nodeCount + 1;
                     activeNode = newActiveNode;
-                    vscode.setState({root: root, nodeCount: nodeCount, activeNode: newActiveNode, nodes: nodes});
+                    vscode.setState({ root: root, nodeCount: nodeCount, activeNode: newActiveNode, nodes: nodes });
                     updateExplorationText();
                     let nodeArray = Object.values(nodes);
                     vscode.postMessage({ type: 'updateGraph', command: "showD3Graph", treeData: nodeArray, activeNode: newActiveNode });
@@ -168,7 +172,8 @@
                     document.getElementById('htmlCount').innerHTML = nodeCount;
                     document.getElementById('fileChanged').style.background = 'DodgerBlue';
                     document.getElementById('pyRun').style.background = 'DodgerBlue';
-                    vscode.postMessage({ type: 'createCommit', command: "showD3Graph", activeNode: activeNode, childCheck: childCheck, parentBranch: parentBranch });
+                    vscode.postMessage({ type: 'createCommit', command: "showD3Graph", activeNode: activeNode, childCheck: childCheck, parentBranch: parentBranch, parentCommit: parentCommit });
+                    //vscode.postMessage({ type: 'newNodeCreated', nodeId: activeNode, parentCommit: "123", newCommit: "321"});
                     break;
                 }
             case 'fileChanged':
@@ -199,7 +204,7 @@
                     const newNodeY = message.data.y;
                     nodes[nodeToUpdate].x = newNodeX;
                     nodes[nodeToUpdate].y = newNodeY;
-                    vscode.setState({root: root, nodeCount: nodeCount, activeNode: activeNode, nodes: nodes});
+                    vscode.setState({ root: root, nodeCount: nodeCount, activeNode: activeNode, nodes: nodes });
                     break;
                 }
 
@@ -207,7 +212,7 @@
                 {
                     const nodeToUpdate = message.data;
                     nodes[nodeToUpdate].visible = false;
-                    vscode.setState({root: root, nodeCount: nodeCount, activeNode: activeNode, nodes: nodes});
+                    vscode.setState({ root: root, nodeCount: nodeCount, activeNode: activeNode, nodes: nodes });
                     break;
                 }
             case 'triggerExport':
@@ -215,7 +220,7 @@
                     // Export the data
                     vscode.postMessage({ type: 'getExport', treeData: nodes });
                     // Reset the data
-                    vscode.setState({root: -1, nodeCount: 0, activeNode: 0, nodes: {}});
+                    vscode.setState({ root: -1, nodeCount: 0, activeNode: 0, nodes: {} });
                     nodes = {};
                     nodeCount = 0;
                     activeNode = 0;
@@ -225,6 +230,17 @@
                     // Close visual if it's open
                     break;
                 }
+            case 'updateSummary':
+                {
+                    //Update the node
+                    const nodeToUpdate = message.data.nodeId;
+                    const changeLog = message.data.changeLog;
+                    nodes[nodeToUpdate].text = changeLog;
+                    vscode.setState({ root: root, nodeCount: nodeCount, activeNode: activeNode, nodes: nodes });
+                    //Also update the side bar
+                    updateExplorationText();
+                    break;
+                }
         }
     });
 
@@ -232,13 +248,13 @@
         const textAreaObject = document.querySelector('#view1 textarea');
         const userIssueText = textAreaObject.value;
         let newNodes = {};
-        newNodes[0] = {text: userIssueText, id: 0, commitId: "", branchId: "", x: 250, y: 250, children: [], visible: true};
+        newNodes[0] = { text: userIssueText, id: 0, commitId: "", branchId: "", x: 250, y: 250, children: [], visible: true };
         nodeCount = nodeCount + 1;
         //update the local global variables: nodes, activeNode, root
         nodes = newNodes;
         activeNode = 0;
         root = 0;
-        vscode.setState({root: 0, nodeCount: nodeCount, activeNode: 0, nodes: newNodes});
+        vscode.setState({ root: 0, nodeCount: nodeCount, activeNode: 0, nodes: newNodes });
         textAreaObject.value = '';
         updateExplorationText();
         vscode.postMessage({ type: 'initializeRepo' });
@@ -248,7 +264,7 @@
     function emptyState() {
         nodeCount = 0;
         activeNode = 0;
-        vscode.setState({root: -1, nodeCount: nodeCount, activeNode: activeNode, nodes: {}});
+        vscode.setState({ root: -1, nodeCount: nodeCount, activeNode: activeNode, nodes: {} });
         showView([]);
         localStorage.clear();
         vscode.postMessage({ type: 'removeRepo' });
@@ -279,13 +295,13 @@
             //checkChildCommits(node); 
             //debug stuff
             document.getElementById('htmlCount').innerHTML = nodeCount;
-            document.getElementById('firstNode').innerHTML = nodes[0].text;      
+            document.getElementById('firstNode').innerHTML = nodes[0].text;
         }
     }
 
     function updateText(event) {
         nodes[activeNode].text = event.target.value;
-        vscode.setState({root: root, nodeCount: nodeCount, activeNode: activeNode, nodes: nodes});
+        vscode.setState({ root: root, nodeCount: nodeCount, activeNode: activeNode, nodes: nodes });
         vscode.postMessage({ type: 'updateNodeText', command: "showD3Graph", newText: event.target.value, activeNode: activeNode });
     }
 
