@@ -5,6 +5,8 @@ export function createGraph(treeData, aNode, nCount) {
     let activeNode = aNode;
     let nodeCount = nCount;
 
+    console.log(nodes);
+
     // Set up the canvas
     const canvas = document.getElementById("canvas");
     // Pen and select functionality

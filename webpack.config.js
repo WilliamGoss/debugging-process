@@ -9,6 +9,7 @@ const path = require('path');
 
 /** @type WebpackConfig */
 const extensionConfig = {
+  name: 'extensionConfig',
   target: 'node', // VS Code extensions run in a Node.js-context 📖 -> https://webpack.js.org/configuration/node/
 	mode: 'none', // this leaves the source code as close as possible to the original (when packaging we set this to 'production')
 
@@ -45,4 +46,38 @@ const extensionConfig = {
     level: "log", // enables logging required for problem matchers
   },
 };
-module.exports = [ extensionConfig ];
+
+/** React webviews (Browser) */
+const webviewConfig = {
+  name: 'webviewConfig',
+  target: 'web',
+  mode: 'production', // or 'development' while coding
+
+  entry: {
+    canvasApp: './src/webviews/reactAppCanvas/index.tsx'
+  },
+  output: {
+    path: path.resolve(__dirname, 'dist'),
+    filename: '[name].js' // dist/reactApp1.js, dist/reactApp2.js
+  },
+  resolve: {
+    extensions: ['.ts', '.tsx', '.js']
+  },
+  module: {
+    rules: [
+      {
+        test: /\.tsx?$/,
+        exclude: /node_modules/,
+        use: 'ts-loader'
+      },
+      {
+        test: /\.css$/i,
+        use: ['style-loader', 'css-loader']
+      }
+    ]
+  },
+  devtool: 'source-map'
+};
+
+
+module.exports = [ extensionConfig, webviewConfig ];

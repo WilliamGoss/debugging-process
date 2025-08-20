@@ -6,6 +6,8 @@ import OpenAI from "openai";
 import { diffLines } from 'diff';
 //import { exec } from "child_process";
 
+import { CanvasViewProvider } from './panels/CanvasViewProvider';
+
 let graphView: vscode.WebviewPanel | undefined = undefined;
 
 let workspaceFolder = vscode.workspace.workspaceFolders ? vscode.workspace.workspaceFolders[0].uri.fsPath : null;
@@ -260,6 +262,33 @@ export async function activate(context: vscode.ExtensionContext) {
 		vscode.commands.registerCommand('extension.export', () => {
 			provider.receiveInformation("triggerExport", {});
         })
+	);
+
+	//New View
+	context.subscriptions.push(
+		vscode.commands.registerCommand("extension.showCanvasView", () => {
+			const panel = vscode.window.createWebviewPanel(
+				"canvasMUIView",
+				"Canvas MUI Panel",
+				vscode.ViewColumn.One,
+				{
+					enableScripts: true,
+					localResourceRoots: [context.extensionUri]
+				}
+			);
+
+			const canvasProvider = new CanvasViewProvider(context.extensionUri);
+
+			const scriptUri = vscode.Uri.joinPath(
+				context.extensionUri,
+				"dist",
+				"canvasApp.js"
+			  );
+			  const webviewScriptUri = panel.webview.asWebviewUri(scriptUri);
+			  const nonce = getNonce();
+		  
+			  panel.webview.html = (canvasProvider as any)._getHtml(webviewScriptUri, nonce);
+		})
 	);
 }
 
@@ -695,6 +724,7 @@ async function listFiles(dirPath: string): Promise<FileList> {
 	async function readDir(currentPath: string): Promise<void> {
 	  const entries = await fs.promises.readdir(currentPath, { withFileTypes: true });
 	  for (const entry of entries) {
+		console.log(entry.name);
 		const fullPath = path.join(currentPath, entry.name);
 		if (entry.isDirectory()) {
 		  await readDir(fullPath);
@@ -892,7 +922,8 @@ function runPythonScript(filePath: string, provider: DebugViewProvider) {
 
 //Make this an API call on a server if there is time... 
 async function summarizeChanges(parentCommit: string, newCommit: string, dir: string, gdir: string) {
-	//const apiKey = ""
+	/*
+	const apiKey = "REDACTED";
 
 	const files = fs.readdirSync(dir);
 	const pyFiles = files.filter( f => f.endsWith('.py'));
@@ -920,7 +951,7 @@ async function summarizeChanges(parentCommit: string, newCommit: string, dir: st
 	const diffs = diffLines(text1, text2);
 	
 	const diffString = JSON.stringify(diffs);
-	/*
+
 	const client = new OpenAI({ apiKey});
 
 	const query = await client.chat.completions.create({

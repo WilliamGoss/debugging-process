@@ -28,6 +28,10 @@
         "title": "Show D3 Graph"
       },
       {
+        "command": "extension.showCanvasView",
+        "title": "Show Canvas View"
+      },
+      {
         "command": "extension.updateD3Graph",
         "title": "Update Graph"
       },
@@ -79,7 +83,10 @@
     "watch-tests": "tsc -p . -w --outDir out",
     "pretest": "npm run compile-tests && npm run compile && npm run lint",
     "lint": "eslint src --ext ts",
-    "test": "vscode-test"
+    "test": "vscode-test",
+    "build:react": "webpack --config webpack.config.js --config-name webviewConfig",
+    "build:ext": "tsc -p ./",
+    "build": "npm run build:react && npm run build:ext"
   },
   "devDependencies": {
     "@types/d3": "^7.4.3",
@@ -98,11 +105,20 @@
     "webpack-cli": "^5.1.4"
   },
   "dependencies": {
+    "@emotion/react": "^11.14.0",
+    "@emotion/styled": "^11.14.1",
     "@isomorphic-git/lightning-fs": "^4.6.0",
+    "@mui/material": "^7.3.1",
+    "@types/react": "^19.1.10",
+    "@types/react-dom": "^19.1.7",
     "d3": "^7.9.0",
     "dagre-d3": "^0.6.4",
     "diff": "^8.0.2",
     "isomorphic-git": "^1.27.1",
-    "openai": "^5.12.2"
+    "openai": "^5.12.2",
+    "react": "^19.1.1",
+    "react-dom": "^19.1.1",
+    "react-draggable": "^4.5.0",
+    "react-zoom-pan-pinch": "^3.7.0"
   }
 }
