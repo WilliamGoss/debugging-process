@@ -22,14 +22,39 @@ type Node = {
   error: string | null;
 };
 
+/**
+ * Properties for the `NodeCanvas` component.  In addition to the list of
+ * nodes, callers may provide an optional callback that will be invoked
+ * whenever a node's position is updated via dragging. This allows the
+ * outer webview to inform the extension about coordinate changes, much
+ * like the old D3-based visualization did.
+ */
 type Props = {
+  /**
+   * The array of nodes to render. Each node is rendered at its
+   * `x`/`y` world coordinate and will display its `text`, `output`
+   * and `error` properties. If the array length changes the
+   * component will synchronise its internal state accordingly.
+   */
   nodes: Node[];
+  /**
+   * Optional callback fired whenever a node's position is updated
+   * through a drag gesture. It receives the node id and the new
+   * world coordinates. When not provided the component behaves as
+   * before and does not emit any notifications on movement.
+   */
+  onNodePositionChange?: (id: number, x: number, y: number) => void;
+  onNodeDragEnd?: (id: number, x: number, y: number) => void;
+  activeNodeId?: number | null;
+  onActiveNodeChange?: (id: number) => void;
 };
-export default function NodeCanvas({ nodes }: Props) {
+
+export default function NodeCanvas({ nodes, onNodePositionChange, onNodeDragEnd, activeNodeId, onActiveNodeChange }: Props) {
   // Copy incoming nodes into local state so that we can update
   // their coordinates on drag without mutating props. Whenever
   // the nodes prop changes in length (e.g. new nodes added), we
   // synchronise the internal state.
+  /*
   const [internalNodes, setInternalNodes] = useState<Node[]>(nodes);
 
   useEffect(() => {
@@ -39,6 +64,7 @@ export default function NodeCanvas({ nodes }: Props) {
       setInternalNodes(nodes);
     }
   }, [nodes.length]);
+  */
 
   // Track the current translation (tx, ty) and scaling factor of the
   // canvas. These values represent the transform applied to the
@@ -58,13 +84,15 @@ export default function NodeCanvas({ nodes }: Props) {
   // of the viewport. This runs after the first render when the
   // container size is available. We also re-run when the number of
   // nodes changes to recalculate the centre.
+  const hasCenteredRef = useRef(false);
+
   useLayoutEffect(() => {
     const container = containerRef.current;
-    if (container) {
-      const { clientWidth, clientHeight } = container;
-      setTransform((prev) => ({ ...prev, tx: clientWidth / 2, ty: clientHeight / 2 }));
-    }
-  }, [internalNodes.length]);
+    if (!container || hasCenteredRef.current) { return; }
+    const { clientWidth, clientHeight } = container;
+    setTransform((prev) => ({ ...prev, tx: clientWidth / 2, ty: clientHeight / 2 }));
+    hasCenteredRef.current = true;
+  }, []);
 
   // Panning state: track whether the user is currently panning and the
   // origin of the pan gesture. We store the starting pointer position
@@ -147,7 +175,16 @@ export default function NodeCanvas({ nodes }: Props) {
   // down to each DraggableNode and called during dragging. We update
   // state immutably to trigger a re-render.
   const updateNodePosition = (id: number, x: number, y: number) => {
-    setInternalNodes((prev) => prev.map((n) => (n.id === id ? { ...n, x, y } : n)));
+    // Update our internal copy of the nodes so that dragging produces
+    // immediate visual feedback. We do this immutably to trigger a
+    // re-render.
+    //setInternalNodes((prev: any) => prev.map((n: any) => (n.id === id ? { ...n, x, y } : n)));
+    // Notify any external listener about the updated coordinates. This
+    // callback is optional and will be used by the webview wrapper to
+    // forward coordinate changes back into the VS Code extension.
+    if (typeof onNodePositionChange === 'function') {
+      onNodePositionChange(id, x, y);
+    }
   };
 
   // Helpers to zoom in, zoom out and reset view via control buttons.
@@ -221,11 +258,14 @@ export default function NodeCanvas({ nodes }: Props) {
           transformOrigin: "0 0",
         }}
       >
-        {internalNodes.map((node) => (
+        {nodes.map((node) => (
           <DraggableNode
             key={node.id}
             node={node}
+            isActive={node.id === activeNodeId}
             onUpdatePosition={updateNodePosition}
+            onDragEnd={onNodeDragEnd}
+            onSelect={() => onActiveNodeChange?.(node.id)}
             scale={transform.scale}
           />
         ))}
@@ -241,10 +281,16 @@ export default function NodeCanvas({ nodes }: Props) {
 function DraggableNode({
   node,
   onUpdatePosition,
+  onDragEnd,
   scale,
+  isActive,
+  onSelect
 }: {
   node: Node;
+  isActive?: boolean;
   onUpdatePosition: (id: number, x: number, y: number) => void;
+  onDragEnd?: (id: number, x: number, y: number) => void;
+  onSelect?: () => void;
   scale: number;
 }) {
   const nodeRef = useRef<HTMLDivElement>(null);
@@ -282,6 +328,15 @@ function DraggableNode({
 
   const handlePointerUp = (e: React.PointerEvent<HTMLDivElement>) => {
     if (!dragRef.current) { return; }
+
+    const dx = (e.clientX - dragRef.current.startX) / scale;
+    const dy = (e.clientY - dragRef.current.startY) / scale;
+    const finalX = dragRef.current.origX + dx;
+    const finalY = dragRef.current.origY + dy;
+
+    onUpdatePosition(node.id, finalX, finalY);   // ensure final is applied
+    onDragEnd?.(node.id, finalX, finalY);        // NEW: notify parent once
+
     dragRef.current = null;
     e.currentTarget.releasePointerCapture(e.pointerId);
   };
@@ -290,6 +345,10 @@ function DraggableNode({
     <Card
       ref={nodeRef}
       className="canvas-node"
+      onDoubleClick={(e) => {
+        e.stopPropagation();
+        onSelect?.();
+      }}
       onPointerDown={handlePointerDown}
       onPointerMove={handlePointerMove}
       onPointerUp={handlePointerUp}
@@ -302,6 +361,13 @@ function DraggableNode({
         top: node.y,
         cursor: dragRef.current ? "grabbing" : "grab",
         userSelect: "none",
+
+        // active styling
+        bgcolor: isActive ? "#E3F2FD" : "background.paper", // Blue 50
+        border: "2px solid",
+        borderColor: isActive ? "#90CAF9" : "divider",      // Blue 200
+        boxShadow: isActive ? 6 : 1,
+        transition: "background-color 120ms ease, border-color 120ms ease, box-shadow 120ms ease",
       }}
     >
       <CardContent>

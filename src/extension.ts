@@ -2,6 +2,7 @@ import * as vscode from 'vscode';
 import * as git from "isomorphic-git";
 import fs from 'fs';
 import * as path from 'path';
+//import { getNonce } from './utils/getNonce';
 import OpenAI from "openai";
 import { diffLines } from 'diff';
 //import { exec } from "child_process";
@@ -146,15 +147,49 @@ export async function activate(context: vscode.ExtensionContext) {
                 }
             );
 
-            graphView.webview.html = getWebviewContent(graphView.webview, context.extensionUri, treeData, activeNode);
+            // Construct an HTML page that hosts the React-based canvas. This
+            // replaces the old D3 visualization by loading the compiled
+            // React bundle for the canvas. We generate a unique nonce for
+            // script loading to satisfy the content security policy.
+            {
+                const scriptUri = graphView.webview.asWebviewUri(
+					vscode.Uri.joinPath(context.extensionUri, 'dist', 'canvasApp.js')
+				  );
+				  const nonce = getNonce();
+				  
+				  graphView.webview.html = `<!DOCTYPE html>
+				  <html lang="en">
+				  <head>
+					<meta charset="UTF-8" />
+					<meta http-equiv="Content-Security-Policy"
+						  content="default-src 'none';
+								   img-src ${graphView.webview.cspSource} https:;
+								   style-src ${graphView.webview.cspSource} 'unsafe-inline';
+								   script-src 'nonce-${nonce}';">
+					<meta name="viewport" content="width=device-width, initial-scale=1.0" />
+					<title>Canvas</title>
+				  </head>
+				  <body>
+					<div id="root"></div>
+					<script nonce="${nonce}" src="${scriptUri}"></script>
+				  </body>
+				  </html>`;
+                // After injecting the HTML, send the initial graph data to
+                // the webview so that it can render the nodes. Without this
+                // initial post the React app would start with an empty
+                // canvas and wait for an updateGraph message. This mirrors
+                // the behaviour of the old D3 graph which received the
+                // initial tree via the HTML payload.
+                graphView.webview.postMessage({ command: 'updateGraph', treeData, activeNode });
+            }
 
             graphView.webview.onDidReceiveMessage(
                 message => {
                     switch (message.command) {
                         case 'updateActiveNode':
 							const dir = globalFolder;
-							const commitHash = message.commitId;
-							const branchId = message.branchId;
+							const commitHash = message.node.commitId;
+							const branchId = message.node.branchId;
 							if (commitHash.length === 0) {
 								//new child was added and restored to become selected
 								//console.log("do nothing");
@@ -164,7 +199,7 @@ export async function activate(context: vscode.ExtensionContext) {
 									restoreToCommit({ fs, workspaceFolder, dir, commitHash, branchId});
 								}
 							}
-                            provider.receiveInformation("activeNode", message.activeNode);
+                            provider.receiveInformation("activeNode", message.node.id);
 							restore = true;
                             break;
 						//addNode might be deprecated
