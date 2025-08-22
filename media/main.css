@@ -60,3 +60,62 @@ button:disabled {
     cursor: not-allowed; /* Change cursor to indicate it's not clickable */
     border: 1px solid #a9a9a9; /* Optional: grey border */
 }
+
+/* One scroll container */
+#view2 .diff {
+	flex: 1;
+	min-height: 0;
+	overflow-x: auto;   /* horizontal scroll here */
+	overflow-y: auto;   /* vertical scroll here */
+	border: 1px solid #ddd;
+	border-radius: 6px;
+	background: #fff;   /* fixed light background for the viewport */
+  }
+  
+  /* Code block: no wrapping, no own scrollbars */
+  .code {
+	font-family: ui-monospace, SFMono-Regular, Menlo, monospace;
+	font-size: 12px;
+	white-space: pre;   /* keep long lines intact */
+	overflow: visible;  /* let the parent (.diff) handle scrolling */
+  }
+  
+  .row {
+	display: grid;
+	grid-template-columns: 32px 32px max-content; /* was 52px 52px */
+	gap: 4px;                                    /* was 8px */
+	padding: 1px 4px;                            /* was 2px 10px */
+	align-items: baseline;
+	background: transparent;
+  }
+  
+  /* line numbers: make sure text fits without wrapping */
+  .ln {
+	color: #999;
+	text-align: right;
+	font-size: 11px; /* optional: a little smaller */
+  }
+  
+  
+  /* Make the code cell grow with long lines so its background spans when scrolling */
+  .code-text {
+	min-width: max-content;
+  }
+  
+  /* --- Fixed GitHub-like colors (not theme-dependent) --- */
+  /* Tint BOTH gutters and text cell so the entire row looks uniform */
+  .row.ctx .ln, .row.ctx .code-text { background: #ffffff; }
+  .row.add .ln, .row.add .code-text { background: #e6ffed; }  /* additions (light green) */
+  .row.del .ln, .row.del .code-text { background: #ffeef0; }  /* deletions (light red) */
+  
+  /* Hunk header (fixed light gray) */
+  .hunk-header {
+	position: sticky;
+	top: 0;
+	z-index: 1;
+	background: #f5f5f5;
+	padding: 6px 10px;
+	font-family: ui-monospace, SFMono-Regular, Menlo, monospace;
+	font-size: 12px;
+  }
+  

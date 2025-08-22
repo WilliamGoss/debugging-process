@@ -2,16 +2,17 @@ import * as vscode from 'vscode';
 import * as git from "isomorphic-git";
 import fs from 'fs';
 import * as path from 'path';
-//import { getNonce } from './utils/getNonce';
 import OpenAI from "openai";
 import { diffLines } from 'diff';
-//import { exec } from "child_process";
 
 import { CanvasViewProvider } from './panels/CanvasViewProvider';
+//Python Interpreter for Output/Error
+import { runPythonScript } from './runtime/pythonRunner';
 
 let graphView: vscode.WebviewPanel | undefined = undefined;
 
 let workspaceFolder = vscode.workspace.workspaceFolders ? vscode.workspace.workspaceFolders[0].uri.fsPath : null;
+
 
 export async function activate(context: vscode.ExtensionContext) {
 
@@ -49,32 +50,11 @@ export async function activate(context: vscode.ExtensionContext) {
 
 	// get terminal execution and check if python was run
 	context.subscriptions.push(vscode.window.onDidStartTerminalShellExecution((event) => {
-		console.log(event);
 		if (event.execution.commandLine.value.includes('python')) {
 			pythonExecuted = true;
 			//provider.receiveInformation("pythonRan", "");
 		}
 	}));
-
-	/*
-	vscode.workspace.onDidChangeWorkspaceFolders(() => {
-		const newWorkspaceFolder = vscode.workspace.workspaceFolders ? vscode.workspace.workspaceFolders[0].uri.fsPath : null;
-
-		//if change is detected on workspace folders
-		if (workspaceFolder !== newWorkspaceFolder) {
-			workspaceFolder = newWorkspaceFolder;
-
-			if (workspaceFolder) {
-				//from null to real workspace
-				provider.receiveInformation("workspaceInfo", newWorkspaceFolder);
-			} else {
-				//from real workspace  to null
-				//not sure this is possible?
-				provider.receiveInformation("workspaceInfo", "null");
-			}
-		}
-	});
-	*/
 
 	// Check for file changes and Python execution
     setInterval(() => {
@@ -647,17 +627,7 @@ class DebugViewProvider implements vscode.WebviewViewProvider {
 						if (workspaceFolder !== null) {
 							const changeLog = await summarizeChanges(data.parentCommit, log[0].oid, workspaceFolder, gitLoc);
 							vscode.commands.executeCommand('extension.updateSummary', activeNode, changeLog);
-							vscode.commands.executeCommand('extension.updateNodeText', activeNode, changeLog);
 						}
-						break;
-					}
-				case "newNodeCreated":
-					{
-						//TODO DELETE THIS!!!
-						console.log(data);
-						//const changeLog = await summarizeChanges("A B C - C B A");
-						//vscode.commands.executeCommand('extension.updateSummary', data.nodeId, changeLog);
-						//vscode.commands.executeCommand('extension.updateNodeText', data.nodeId, changeLog);
 						break;
 					}
 			}
@@ -759,7 +729,6 @@ async function listFiles(dirPath: string): Promise<FileList> {
 	async function readDir(currentPath: string): Promise<void> {
 	  const entries = await fs.promises.readdir(currentPath, { withFileTypes: true });
 	  for (const entry of entries) {
-		console.log(entry.name);
 		const fullPath = path.join(currentPath, entry.name);
 		if (entry.isDirectory()) {
 		  await readDir(fullPath);
@@ -940,25 +909,9 @@ function clearDirectory(dirPath: string) {
 	});
 }
 
-function runPythonScript(filePath: string, provider: DebugViewProvider) {
-	const { exec } = require("node:child_process");
-
-	const output = vscode.window.createOutputChannel("Debugger");
-	output.clear();
-	output.show(true);
-  
-	exec(`python3 "${filePath}"`, (error: any, stdout: any, stderr: any) => {
-	  if (stdout) { output.append(stdout); provider.receiveInformation("autoCreateNode", stdout);}
-	  if (stderr) { output.append(stderr); provider.receiveInformation("autoCreateNode", stderr); }
-	  if (error) { output.append(`Error: ${error.message}`); }
-	});
-
-  }
-
 //Make this an API call on a server if there is time... 
 async function summarizeChanges(parentCommit: string, newCommit: string, dir: string, gdir: string) {
-	/*
-	const apiKey = "REDACTED";
+	//const apiKey = "REDACTED";
 
 	const files = fs.readdirSync(dir);
 	const pyFiles = files.filter( f => f.endsWith('.py'));
@@ -987,6 +940,7 @@ async function summarizeChanges(parentCommit: string, newCommit: string, dir: st
 	
 	const diffString = JSON.stringify(diffs);
 
+	/*
 	const client = new OpenAI({ apiKey});
 
 	const query = await client.chat.completions.create({
@@ -1001,7 +955,7 @@ async function summarizeChanges(parentCommit: string, newCommit: string, dir: st
 	*/
 	const summary = "tester";
 	//Update the corresponding node's text.
-	return summary;
+	return [summary, diffs];
 }
 
 export function deactivate() {}

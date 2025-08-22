@@ -1,5 +1,5 @@
 import React, { useRef, useState, useEffect, useLayoutEffect } from "react";
-import { Card, CardContent, Typography, Button, TextField, Collapse } from "@mui/material";
+import { Card, CardContent, Typography, Button, TextField, Collapse, Box } from "@mui/material";
 
 /*
  * NOTE:
@@ -18,8 +18,8 @@ type Node = {
   id: number;
   x: number;
   y: number;
-  output: string | null;
-  error: string | null;
+  runOutput: string | null;
+  runError: string | null;
 };
 
 /**
@@ -295,14 +295,39 @@ function DraggableNode({
 }) {
   const nodeRef = useRef<HTMLDivElement>(null);
   const [expanded, setExpanded] = useState(false);
-  // Track dragging state for this node. We store initial pointer
-  // coordinates and the original node position.
+  const [errorExpanded, setErrorExpanded] = useState(false);
+  const [outputExpanded, setOutputExpanded] = useState(false);
+
+  const hasError = !!(node.runError && String(node.runError).trim().length);
+
+
   const dragRef = useRef<{
     startX: number;
     startY: number;
     origX: number;
     origY: number;
   } | null>(null);
+
+  useEffect(() => {
+    if (!errorExpanded && !outputExpanded) { return; }
+    const closeOnAnyPointerDown = () => {
+      setErrorExpanded(false);
+      setOutputExpanded(false);
+    };
+    window.addEventListener("pointerdown", closeOnAnyPointerDown, true); // capture
+    return () => window.removeEventListener("pointerdown", closeOnAnyPointerDown, true);
+  }, [errorExpanded, outputExpanded]);
+
+  const countLines = (text: string | null | undefined) => {
+    // normalize newlines, trim trailing newlines, then count
+    const s = String(text ?? "").replace(/\r\n/g, "\n").replace(/\n+$/, "");
+    return Math.max(1, s.length ? s.split("\n").length : 1);
+  };
+  
+  const outputRows = Math.min(5, countLines(node.runOutput));
+  const errorRows  = Math.min(5, countLines(node.runError));
+  
+  
 
   const handlePointerDown = (e: React.PointerEvent<HTMLDivElement>) => {
     // Only start dragging on primary button
@@ -334,67 +359,245 @@ function DraggableNode({
     const finalX = dragRef.current.origX + dx;
     const finalY = dragRef.current.origY + dy;
 
-    onUpdatePosition(node.id, finalX, finalY);   // ensure final is applied
-    onDragEnd?.(node.id, finalX, finalY);        // NEW: notify parent once
+    onUpdatePosition(node.id, finalX, finalY);
+    onDragEnd?.(node.id, finalX, finalY);
 
     dragRef.current = null;
     e.currentTarget.releasePointerCapture(e.pointerId);
   };
 
+  const hasOutput = !!(node.runOutput && String(node.runOutput).trim().length);
+
   return (
     <Card
       ref={nodeRef}
       className="canvas-node"
-      onDoubleClick={(e) => {
-        e.stopPropagation();
-        onSelect?.();
-      }}
+      onDoubleClick={(e) => { e.stopPropagation(); onSelect?.(); }}
       onPointerDown={handlePointerDown}
       onPointerMove={handlePointerMove}
       onPointerUp={handlePointerUp}
       onPointerCancel={handlePointerUp}
       sx={{
         width: 250,
-        p: 2,
+        p: 1,
+        pt: 0.5,
+        m: 0,
         position: "absolute",
         left: node.x,
         top: node.y,
         cursor: dragRef.current ? "grabbing" : "grab",
         userSelect: "none",
-
-        // active styling
-        bgcolor: isActive ? "#E3F2FD" : "background.paper", // Blue 50
+        bgcolor: isActive ? "#E3F2FD" : "background.paper",
         border: "2px solid",
-        borderColor: isActive ? "#90CAF9" : "divider",      // Blue 200
+        borderColor: isActive ? "#90CAF9" : "divider",
         boxShadow: isActive ? 6 : 1,
         transition: "background-color 120ms ease, border-color 120ms ease, box-shadow 120ms ease",
+        overflow: "visible", // required for inline expand
+        isolation: "isolate"
       }}
     >
-      <CardContent>
-        <Typography variant="body1">{node.text}</Typography>
-        <Button size="small" onClick={(ev) => {
-          ev.stopPropagation();
-          setExpanded((prev) => !prev);
-        }} sx={{ mt: 1 }}>
-          {expanded ? "Hide Runtime Information" : "Show Runtime Information"}
-        </Button>
-        <Collapse in={expanded}>
-          <TextField
-            label="Output"
-            value={node.output ?? ""}
-            fullWidth
-            margin="dense"
-            InputProps={{ readOnly: true }}
+      {/* top-right node chevron */}
+      <div
+        style={{ position: "absolute", top: 4, right: 4, display: "flex", alignItems: "center", gap: 4 }}
+        onPointerDown={(e) => e.stopPropagation()}
+        onClick={(e) => { e.stopPropagation(); setExpanded((prev) => !prev); }}
+        role="button"
+        aria-label={expanded ? "Collapse runtime info" : "Expand runtime info"}
+        title={expanded ? "Collapse" : "Expand"}
+      >
+        <svg width="20" height="20" viewBox="0 0 16 16" aria-hidden="true">
+          <path
+            d={expanded ? "M4,10 L8,6 L12,10" : "M4,6 L8,10 L12,6"}
+            fill="none"
+            stroke="currentColor"
+            strokeWidth="2"
+            strokeLinecap="round"
+            strokeLinejoin="round"
           />
-          <TextField
-            label="Error"
-            value={node.error ?? ""}
-            fullWidth
-            margin="dense"
-            InputProps={{ readOnly: true }}
-          />
+        </svg>
+      </div>
+  
+      <CardContent sx={{ p: 1, pt: 0.75, "&:last-child": { pb: 1 } }}>
+        <Typography variant="body1" sx={{ pr: 2 }}>
+          {node.text}
+        </Typography>
+  
+        <Collapse in={expanded} unmountOnExit sx={{ mt: 1 }}>
+          <Box onPointerDown={(e) => e.stopPropagation()}>
+            {/* OUTPUT */}
+            {/* OUTPUT (click the textarea to expand) */}
+{hasOutput ? (
+  <Box sx={{ position: "relative" }} onPointerDown={(e) => e.stopPropagation()}>
+    <TextField
+      label="Output"
+      value={node.runOutput ?? ""}
+      fullWidth
+      multiline
+      minRows={outputRows}
+      maxRows={outputRows}
+      margin="dense"
+      spellCheck={false}
+      inputProps={{ wrap: "off" }} // horizontal scroll
+      onClick={() => setOutputExpanded(true)} // click to expand
+      sx={{
+        "& .MuiInputBase-input": {
+          fontFamily: "ui-monospace, SFMono-Regular, Menlo, monospace",
+          fontSize: "0.85rem",
+          lineHeight: 1.35,
+        },
+        "& .MuiInputBase-inputMultiline": {
+          whiteSpace: "pre",   // no soft wrap; preserve spaces/newlines
+          overflow: "hidden",
+          maxHeight: 220,      // adjust as needed
+          resize: "none",  // let users resize if they want
+        },
+        "& textarea": { overflowX: "auto", resize: "none" }, // show horizontal scrollbar
+      }}
+      InputProps={{ readOnly: true }}
+    />
+
+    {/* Expanded panel that auto-sizes to content and collapses on click */}
+    {outputExpanded && (
+      <Box
+        onClick={() => setOutputExpanded(false)}
+        sx={{
+          position: "absolute",
+          zIndex: 20,
+          top: -8,
+          left: -8,
+
+          // shrink-wrap to content; clamp to viewport
+          display: "inline-block",
+          width: "max-content",
+          height: "max-content",
+          maxWidth: "90vw",
+          maxHeight: "80vh",
+          overflow: "auto",
+
+          bgcolor: "background.paper",
+          border: "1px solid",
+          borderColor: "divider",
+          borderRadius: 1,
+          boxShadow: 6,
+          p: 1,
+        }}
+      >
+        <pre
+          style={{
+            margin: 0,
+            padding: 8,
+            fontFamily: "ui-monospace, SFMono-Regular, Menlo, monospace",
+            fontSize: "0.85rem",
+            lineHeight: 1.35,
+            whiteSpace: "pre",
+            display: "block",
+          }}
+        >
+          {node.runOutput ?? ""}
+        </pre>
+      </Box>
+    )}
+  </Box>
+) : (
+  <TextField
+    label="Output"
+    placeholder="No output was detected"
+    fullWidth
+    margin="dense"
+    disabled
+    sx={{
+      "& .MuiInputBase-input": {
+        fontStyle: "italic",
+        fontFamily: "ui-monospace, SFMono-Regular, Menlo, monospace",
+        fontSize: "0.85rem",
+        lineHeight: 1.4,
+      },
+      "& .MuiInputBase-input::placeholder": {
+        fontStyle: "italic",
+        color: "text.disabled",
+        opacity: 1,
+      },
+    }}
+  />
+)}
+
+  
+{/* ERROR (click the textarea to expand) */}
+<Box sx={{ position: "relative" }} onPointerDown={(e) => e.stopPropagation()}>
+  <TextField
+    label="Error"
+    value={node.runError ?? ""}
+    fullWidth
+    multiline
+    minRows={errorRows}
+    maxRows={errorRows}
+    margin="dense"
+    spellCheck={false}
+    inputProps={{ wrap: "off" }}
+    onClick={() => { if (hasError) { setErrorExpanded(true); }}} // click to expand
+    sx={{
+      "& .MuiInputBase-input": {
+        fontFamily: "ui-monospace, SFMono-Regular, Menlo, monospace",
+        fontSize: "0.85rem",
+        lineHeight: 1.35,
+      },
+      "& .MuiInputBase-inputMultiline": {
+        whiteSpace: "pre",
+        overflow: "hidden",
+        maxHeight: 200,
+        resize: "none",
+      },
+      "& textarea": { overflowX: "auto", resize: "none" },
+      // no extra right padding since there's no chevron now
+    }}
+    InputProps={{ readOnly: true }}
+  />
+
+  {/* Expanded panel that auto-sizes to content and collapses on click */}
+  {errorExpanded && (
+    <Box
+      onClick={() => setErrorExpanded(false)}
+      sx={{
+        position: "absolute",
+        zIndex: 20,
+        top: -8,
+        left: -8,
+
+        display: "inline-block",
+        width: "max-content",
+        height: "max-content",
+        maxWidth: "90vw",
+        maxHeight: "80vh",
+        overflow: "auto",
+
+        bgcolor: "background.paper",
+        border: "1px solid",
+        borderColor: "divider",
+        borderRadius: 1,
+        boxShadow: 6,
+        p: 1,
+      }}
+    >
+      <pre
+        style={{
+          margin: 0,
+          padding: 8,
+          fontFamily: "ui-monospace, SFMono-Regular, Menlo, monospace",
+          fontSize: "0.85rem",
+          lineHeight: 1.35,
+          whiteSpace: "pre",
+          display: "block",
+        }}
+      >
+        {node.runError ?? ""}
+      </pre>
+    </Box>
+  )}
+</Box>
+
+          </Box>
         </Collapse>
       </CardContent>
     </Card>
-  );
+  );  
 }
