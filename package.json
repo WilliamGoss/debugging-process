@@ -3,7 +3,7 @@
   "displayName": "Debugging Process",
   "description": "Helps to understand debugging process",
   "publisher": "uiuc-goss",
-  "version": "0.1.0",
+  "version": "0.1.1",
   "engines": {
     "vscode": "^1.93.0"
   },
@@ -75,8 +75,14 @@
         "command": "extension.runPythonFile",
         "title": "Run Python File"
       },
-      { "command": "extension.setOpenAIKey", "title": "Debug: Set OpenAI API Key" },
-      { "command": "extension.clearOpenAIKey", "title": "Debug: Clear OpenAI API Key" }
+      {
+        "command": "extension.setOpenAIKey",
+        "title": "Debug: Set OpenAI API Key"
+      },
+      {
+        "command": "extension.clearOpenAIKey",
+        "title": "Debug: Clear OpenAI API Key"
+      }
     ]
   },
   "scripts": {
