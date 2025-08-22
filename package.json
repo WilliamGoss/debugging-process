@@ -74,7 +74,9 @@
       {
         "command": "extension.runPythonFile",
         "title": "Run Python File"
-      }
+      },
+      { "command": "extension.setOpenAIKey", "title": "Debug: Set OpenAI API Key" },
+      { "command": "extension.clearOpenAIKey", "title": "Debug: Clear OpenAI API Key" }
     ]
   },
   "scripts": {
@@ -119,6 +121,7 @@
     "dagre-d3": "^0.6.4",
     "diff": "^8.0.2",
     "isomorphic-git": "^1.27.1",
+    "npm": "^11.5.2",
     "openai": "^5.12.2",
     "react": "^19.1.1",
     "react-dom": "^19.1.1",

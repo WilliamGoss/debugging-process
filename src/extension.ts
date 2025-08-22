@@ -54,7 +54,7 @@ export async function activate(context: vscode.ExtensionContext) {
 
 	const globalFolder = context.globalStorageUri.path;
 
-    const provider = new DebugViewProvider(context.extensionUri, context.globalStorageUri);
+    const provider = new DebugViewProvider(context, context.extensionUri, context.globalStorageUri);
 
 	let fileChanged = false;
 	let pythonExecuted = false;
@@ -400,6 +400,31 @@ export async function activate(context: vscode.ExtensionContext) {
 			  panel.webview.html = (canvasProvider as any)._getHtml(webviewScriptUri, nonce);
 		})
 	);
+
+	//TODO REMOVE THESE WHEN SERVER IS UP
+	// Command: Set OpenAI API Key
+	context.subscriptions.push(
+		vscode.commands.registerCommand('extension.setOpenAIKey', async () => {
+		const input = await vscode.window.showInputBox({
+			prompt: 'Enter your OpenAI API key',
+			placeHolder: 'sk-...',
+			password: true,
+			ignoreFocusOut: true,
+			validateInput: (v) => v.trim().startsWith('sk-') ? undefined : 'Key should start with "sk-".'
+		});
+		if (!input) return;
+		await context.secrets.store('openai.apiKey', input.trim());
+		vscode.window.showInformationMessage('OpenAI API key saved securely.');
+		})
+	);
+	
+	// Command: Clear OpenAI API Key
+	context.subscriptions.push(
+		vscode.commands.registerCommand('extension.clearOpenAIKey', async () => {
+		await context.secrets.delete('openai.apiKey');
+		vscode.window.showInformationMessage('OpenAI API key removed.');
+		})
+	);
 }
 
 function getWebviewContent(webview: vscode.Webview, extensionUri: vscode.Uri, treeData: any, activeNode: any) {
@@ -551,6 +576,7 @@ class DebugViewProvider implements vscode.WebviewViewProvider {
 	private _view?: vscode.WebviewView;
 
 	constructor(
+		private readonly _ctx: vscode.ExtensionContext,
 		private readonly _extensionUri: vscode.Uri,
 		private readonly _globalStorage: vscode.Uri
 	) { }
@@ -720,8 +746,9 @@ class DebugViewProvider implements vscode.WebviewViewProvider {
 						vscode.commands.executeCommand('extension.resetCodeChange');
 						vscode.commands.executeCommand('extension.attachCommit', activeNode, log[0].oid, branch);
 						if (workspaceFolder !== null) {
-							const changeLog = await summarizeChanges(data.parentCommit, log[0].oid, workspaceFolder, gitLoc);
+							const changeLog = await summarizeChanges(data.parentCommit, log[0].oid, workspaceFolder, gitLoc, this._ctx);
 							vscode.commands.executeCommand('extension.updateSummary', activeNode, changeLog);
+							vscode.commands.executeCommand('extension.updateNodeText', activeNode, changeLog[0]);
 						}
 						break;
 					}
@@ -1004,8 +1031,27 @@ function clearDirectory(dirPath: string) {
 	});
 }
 
+//TODO REMOVE THIS
+async function getOpenAIKey(ctx: vscode.ExtensionContext): Promise<string | undefined> {
+	const fromSecrets = await ctx.secrets.get('openai.apiKey');
+	if (fromSecrets) return fromSecrets;
+  
+	if (process.env.OPENAI_API_KEY?.trim()) return process.env.OPENAI_API_KEY.trim();
+  
+	const input = await vscode.window.showInputBox({
+	  prompt: 'Enter your OpenAI API key to enable change summaries',
+	  placeHolder: 'sk-...',
+	  password: true,
+	  ignoreFocusOut: true
+	});
+	if (!input?.trim()) return;
+	await ctx.secrets.store('openai.apiKey', input.trim());
+	vscode.window.showInformationMessage('OpenAI API key saved securely.');
+	return input.trim();
+  }
+
 //Make this an API call on a server if there is time... 
-async function summarizeChanges(parentCommit: string, newCommit: string, dir: string, gdir: string) {
+async function summarizeChanges(parentCommit: string, newCommit: string, dir: string, gdir: string, ctx: vscode.ExtensionContext) {
 
 	const files = fs.readdirSync(dir);
 	const pyFiles = files.filter( f => f.endsWith('.py'));
@@ -1034,7 +1080,11 @@ async function summarizeChanges(parentCommit: string, newCommit: string, dir: st
 	
 	const diffString = JSON.stringify(diffs);
 
-	/*
+	const apiKey = await getOpenAIKey(ctx);
+	if (!apiKey) {
+	  return ['No summary available.', diffs];
+	}
+
 	const client = new OpenAI({ apiKey});
 
 	const query = await client.chat.completions.create({
@@ -1046,8 +1096,7 @@ async function summarizeChanges(parentCommit: string, newCommit: string, dir: st
 	});
 
 	const summary = query.choices[0].message?.content ?? "No summary available.";
-	*/
-	const summary = "tester";
+
 	//Update the corresponding node's text.
 	return [summary, diffs];
 }
