@@ -13,10 +13,33 @@ let graphView: vscode.WebviewPanel | undefined = undefined;
 
 let workspaceFolder = vscode.workspace.workspaceFolders ? vscode.workspace.workspaceFolders[0].uri.fsPath : null;
 
+/**
+ * Maintain a mapping of the last run contents for each Python file.  This
+ * allows the extension to determine whether the currently executed code
+ * actually differs from the previous run.  The mapping is hydrated from
+ * the globalState when the extension activates and persisted back to
+ * globalState whenever it is updated.  By persisting into the
+ * memento-backed storage we ensure that changes survive VS Code reloads
+ * and can be compared across debugging sessions.
+ */
+type PreviousFileMap = { [filePath: string]: string };
+
+// This will be initialised in activate() once the context is available.  It
+// lives in the module scope so that it can be referenced inside the
+// setInterval closure without repeatedly reading from globalState.  See
+// activate() for where it is assigned and persisted.
+let previousFileContents: PreviousFileMap;
+
 
 export async function activate(context: vscode.ExtensionContext) {
 
 	const globalStoragePath = context.globalStorageUri.fsPath;
+
+	// Initialise the per-file history.  Use an empty object as the
+	// default when nothing has been persisted yet.  Storing this in
+	// globalState means it survives across extension reloads and VS Code
+	// restarts.
+	previousFileContents = (context.globalState.get<PreviousFileMap>('previousFileContents') as PreviousFileMap) || {};
 
     // Ensure the folder is created
     fs.promises.mkdir(globalStoragePath, { recursive: true })
@@ -45,14 +68,42 @@ export async function activate(context: vscode.ExtensionContext) {
 	// detect changes to files
 	watcher.onDidChange((uri) => {
 		fileChanged = true;
-		//provider.receiveInformation("fileChanged", "");
+		// Notify the webview that a file was modified so that the UI can
+		// reflect the pending change.  The actual creation of a node
+		// occurs when the user subsequently runs the Python file.
+		provider.receiveInformation("fileChanged", "");
 	});
 
 	// get terminal execution and check if python was run
 	context.subscriptions.push(vscode.window.onDidStartTerminalShellExecution((event) => {
 		if (event.execution.commandLine.value.includes('python')) {
 			pythonExecuted = true;
-			//provider.receiveInformation("pythonRan", "");
+			// Inform the webview that a Python execution occurred.  This
+			// information is used for visual debugging hints and does not
+			// directly create nodes.
+			provider.receiveInformation("pythonRan", "");
+		}
+	}));
+
+	// Also listen for the start of a Python debug session.  Many users
+	// execute their code via the debugger (for example by pressing F5) rather
+	// than sending a command to the terminal.  The debug API exposes
+	// onDidStartDebugSession which we can hook into to detect when a new
+	// debug session begins.  We check the session's type to ensure that
+	// we only respond to Python runs and set the pythonExecuted flag
+	// accordingly.  This event complements the terminal watcher above and
+	// should fire reliably across different platforms.
+	context.subscriptions.push(vscode.debug.onDidStartDebugSession((session) => {
+		try {
+			// Some versions of VS Code may provide a providerId instead of type,
+			// but the Python extension consistently sets type to 'python'.
+			const sessionType = (session === null || session === void 0 ? void 0 : session.type) || (session === null || session === void 0 ? void 0 : session.configuration?.type);
+			if (typeof sessionType === 'string' && sessionType.toLowerCase() === 'python') {
+				pythonExecuted = true;
+				provider.receiveInformation("pythonRan", "");
+			}
+		} catch (err) {
+			console.error('Error processing debug session event:', err);
 		}
 	}));
 
@@ -70,21 +121,65 @@ export async function activate(context: vscode.ExtensionContext) {
 			//provider.receiveInformation("resetNewNodeDebug", '');
 		}
         if (fileChanged && pythonExecuted) {
-			const editor = vscode.window.activeTextEditor;
-			if (!editor) {
-				vscode.window.showErrorMessage("No active editor.");
-				return;
-			}
+            const editor = vscode.window.activeTextEditor;
+            if (!editor) {
+                vscode.window.showErrorMessage("No active editor.");
+                // Reset the flags because we cannot proceed
+                fileChanged = false;
+                pythonExecuted = false;
+                return;
+            }
 
-			const filePath = editor.document.fileName;
+            const filePath = editor.document.fileName;
 
-			if (!filePath.endsWith('.py')) {
-				vscode.window.showErrorMessage("Active file is not a Python file.");
-				return;
-			}
-			const runOutput = runPythonScript(filePath, provider);
-            fileChanged = false;
-            pythonExecuted = false;
+            if (!filePath.endsWith('.py')) {
+                vscode.window.showErrorMessage("Active file is not a Python file.");
+                // Reset the flags because we cannot proceed
+                fileChanged = false;
+                pythonExecuted = false;
+                return;
+            }
+
+            try {
+                // Read the current contents of the Python file.  We do this
+                // synchronously here because the interval callback should
+                // complete quickly and the file sizes of interest are small.
+                const currentContent = fs.readFileSync(filePath, 'utf8');
+                const lastContent = previousFileContents[filePath] ?? '';
+
+                // Use diffLines to detect if there are any added or removed
+                // sections between the previous run and the current state.  If
+                // diffLines returns a sequence where no part is marked as
+                // added or removed then nothing substantive has changed.
+                const diffs = diffLines(lastContent, currentContent);
+                const hasChanges = diffs.some(part => (part as any).added || (part as any).removed);
+
+                if (hasChanges || !(filePath in previousFileContents)) {
+                    // The file content has changed since the last run (or this
+                    // is the first time we are running this file).  Execute
+                    // the Python script which will trigger a new node via
+                    // provider.receiveInformation('autoCreateNode', …).
+                    runPythonScript(filePath, provider);
+
+                    // Persist the current state so that subsequent runs can
+                    // determine whether another node should be created.  Store
+                    // the content both in the in-memory cache and in the
+                    // globalState so that it survives VS Code restarts.
+                    previousFileContents[filePath] = currentContent;
+                    context.globalState.update('previousFileContents', previousFileContents);
+                } else {
+                    // No meaningful changes were detected.  Notify the webview
+                    // that the debug flags should be reset so that the UI
+                    // reflects that a run occurred without creating a node.
+                    provider.receiveInformation('resetNewNodeDebug', '');
+                }
+            } catch (err) {
+                console.error('Error reading file for diff:', err);
+            } finally {
+                // Reset flags regardless of whether we created a node
+                fileChanged = false;
+                pythonExecuted = false;
+            }
         }
 		if (gitChanged) {
 			fileChanged = false;
@@ -911,7 +1006,6 @@ function clearDirectory(dirPath: string) {
 
 //Make this an API call on a server if there is time... 
 async function summarizeChanges(parentCommit: string, newCommit: string, dir: string, gdir: string) {
-	//const apiKey = "REDACTED";
 
 	const files = fs.readdirSync(dir);
 	const pyFiles = files.filter( f => f.endsWith('.py'));
