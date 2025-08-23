@@ -38,29 +38,20 @@ function GraphApp() {
   const [nodes, setNodes] = useState<any[]>([]);
   const [activeNodeId, setActiveNodeId] = useState<number | null>(null);
 
-  /**
-   * A map from node id to its persistable UI state (expanded,
-   * outputExpanded, errorExpanded). This state is loaded from
-   * localStorage on mount so that collapse/expand settings survive
-   * reloading or closing of the webview panel. When any
-   * expansion-related flag changes we update this map and write it
-   * back to localStorage.
-   */
-  const [expansionState, setExpansionState] = useState<Record<number, { expanded?: boolean; outputExpanded?: boolean; errorExpanded?: boolean }>>(() => {
-    if (typeof localStorage === 'undefined') { return {}; }
+  //?
+  const [expansionState, setExpansionState] = useState<Record<number, { expanded?: boolean }>>(() => {
     try {
-      const raw = localStorage.getItem('nodeExpansionStates');
-      if (raw) {
-        const parsed = JSON.parse(raw);
-        if (parsed && typeof parsed === 'object') {
-          return parsed;
-        }
-      }
-    } catch (e) {
-      // ignore parse errors
-    }
-    return {};
+      return JSON.parse(localStorage.getItem('nodeExpansionStates') || '{}') || {};
+    } catch { return {}; }
   });
+  
+  const persistExpanded = (id: number, expanded: boolean) => {
+    setExpansionState(prev => {
+      const next = { ...prev, [id]: { ...(prev[id] || {}), expanded } };
+      try { localStorage.setItem('nodeExpansionStates', JSON.stringify(next)); } catch {}
+      return next;
+    });
+  };
 
   // Install a message listener on mount. When a message with a
   // recognised command arrives we update our local state. This
@@ -73,25 +64,21 @@ function GraphApp() {
       }
       switch (message.command) {
         case 'updateGraph': {
-          // Replace the entire node list with the new tree data. We
-          // preserve all properties as provided so that commit ids,
-          // branch ids and visibility flags are retained.
           if (Array.isArray(message.treeData)) {
-            // Merge any persisted expansion state into the incoming
-            // nodes. Each node may have undefined for expansion flags
-            // initially; we fill them from our expansionState map to
-            // restore UI state.
-            setNodes(message.treeData.map((node: any) => {
-              const saved = expansionState[node.id] ?? {};
-              return {
-                ...node,
-                expanded: typeof node.expanded === 'boolean' ? node.expanded : saved.expanded,
-                outputExpanded: typeof node.outputExpanded === 'boolean' ? node.outputExpanded : saved.outputExpanded,
-                errorExpanded: typeof node.errorExpanded === 'boolean' ? node.errorExpanded : saved.errorExpanded,
-              };
-            }));
+            setNodes(prev => {
+              const prevMap = new Map(prev.map(n => [n.id, n]));
+              return message.treeData.map((n: any) => {
+                const prevN = prevMap.get(n.id);
+                return {
+                  ...n,
+                  expanded: (typeof n.expanded === 'boolean') ? n.expanded : !!prevN?.expanded,
+                  // overlays default closed on load
+                  outputExpanded: false,
+                  errorExpanded:  false,
+                };
+              });
+            });
           }
-          // Accept either a number id or an object with {id}
           const an = message.activeNode;
           if (typeof an === 'number') { setActiveNodeId(an); }
           else if (an && typeof an.id === 'number') { setActiveNodeId(an.id); }
@@ -148,25 +135,11 @@ function GraphApp() {
     vscode.postMessage({ command: 'updateActiveNode', node: node });
   };
 
-  /**
-   * Update helper used by expansion toggles. It updates both the
-   * in-memory node list and the persisted expansion map. The
-   * callback receives the property name (expanded, outputExpanded,
-   * errorExpanded) and the new boolean value.
-   */
-  const updateExpansionFlag = (id: number, prop: 'expanded' | 'outputExpanded' | 'errorExpanded', value: boolean) => {
-    // Update nodes state
-    setNodes(prev => prev.map(node => (node.id === id ? { ...node, [prop]: value } : node)));
-    // Update persistent map and localStorage
-    setExpansionState(prev => {
-      const next = { ...prev, [id]: { ...(prev[id] ?? {}), [prop]: value } };
-      try {
-        localStorage.setItem('nodeExpansionStates', JSON.stringify(next));
-      } catch (e) {
-        // ignore storage errors
-      }
-      return next;
-    });
+  //Handle card exppand
+  //The output or error expansion does not matter for state, since we can always assume it is collapsed on reload.
+  const handleCardExpandCollapse = (id: number, expandState: boolean) => {
+    setNodes(prev => prev.map(n => (n.id === id ? { ...n, expanded: expandState } : n)));
+    vscode.postMessage({ command: 'updateCardExpandState', nodeId: id, expandState });
   };
 
   // Only pass nodes that have not been hidden. The `visible` property
@@ -175,15 +148,20 @@ function GraphApp() {
 
   return (
     <NodeCanvas
-      nodes={visibleNodes}
-      activeNodeId={activeNodeId}
-      onActiveNodeChange={handleActiveNodeChange}
-      onNodePositionChange={handlePositionChange}
-      onNodeDragEnd={handleDragEnd}
-      onNodeExpansionChange={(id, expanded) => updateExpansionFlag(id, 'expanded', expanded)}
-      onNodeOutputExpansionChange={(id, output) => updateExpansionFlag(id, 'outputExpanded', output)}
-      onNodeErrorExpansionChange={(id, error) => updateExpansionFlag(id, 'errorExpanded', error)}
-    />
+  nodes={visibleNodes}
+  activeNodeId={activeNodeId}
+  onActiveNodeChange={handleActiveNodeChange}
+  onNodePositionChange={handlePositionChange}
+  onNodeDragEnd={handleDragEnd}
+  onNodeExpansionChange={handleCardExpandCollapse}
+  // (optional) also wire these if you want the overlays:
+  onNodeOutputExpansionChange={(id, outputExpanded) =>
+    setNodes(prev => prev.map(n => (n.id === id ? { ...n, outputExpanded } : n)))
+  }
+  onNodeErrorExpansionChange={(id, errorExpanded) =>
+    setNodes(prev => prev.map(n => (n.id === id ? { ...n, errorExpanded } : n)))
+  }
+/>
   );
 }
 

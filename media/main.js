@@ -152,8 +152,8 @@
                     // if viewId is blank or not set to view2, it means a bug hasn't been declared yet
                     // it should return as we do not want nodes created until a bug is declared
                     if (viewId === '' || viewId !== "view2") { return; }
-                    let newYValue = nodes[activeNode].y + 10;
-                    let newNode = { text: "Generating summary...", id: nodeCount, commitId: "", branchId: "", x: nodes[activeNode].x, y: newYValue, children: [], visible: true, runOutput: runData.stdout, runError: runData.stderr, diffs: null };
+                    let newYValue = nodes[activeNode].y + 100;
+                    let newNode = { text: "Generating summary...", id: nodeCount, commitId: "", branchId: "", x: nodes[activeNode].x + 100, y: newYValue, children: [], visible: true, runOutput: runData.stdout, runError: runData.stderr, diffs: null, expanded: false };
                     //change active node to the new node
                     let newActiveNode = nodeCount;
                     nodes[nodeCount] = newNode;
@@ -242,6 +242,14 @@
                     updateExplorationText();
                     break;
                 }
+            case 'updateExpandState':
+                {
+                    const nodeToUpdate = message.data.nodeId;
+                    const expandState = message.data.expandState;
+                    nodes[nodeToUpdate].expanded = expandState;
+                    vscode.setState({ root: root, nodeCount: nodeCount, activeNode: activeNode, nodes: nodes });
+                    break;
+                }
         }
     });
 
@@ -249,7 +257,7 @@
         const textAreaObject = document.querySelector('#view1 textarea');
         const userIssueText = textAreaObject.value;
         let newNodes = {};
-        newNodes[0] = { text: userIssueText, id: 0, commitId: "", branchId: "", x: 0, y: 0, children: [], visible: true, runOutput: null, runError: null, diffs: null };
+        newNodes[0] = { text: userIssueText, id: 0, commitId: "", branchId: "", x: 0, y: 0, children: [], visible: true, runOutput: null, runError: null, diffs: null, expanded: false };
         nodeCount = nodeCount + 1;
         //update the local global variables: nodes, activeNode, root
         nodes = newNodes;

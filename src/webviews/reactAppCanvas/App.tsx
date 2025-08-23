@@ -126,19 +126,55 @@ export default function NodeCanvas({
   // initial centering.
   const containerRef = useRef<HTMLDivElement>(null);
 
-  // Initialise the translation to centre the origin (0,0) in the middle
-  // of the viewport. This runs after the first render when the
-  // container size is available. We also re-run when the number of
-  // nodes changes to recalculate the centre.
-  const hasCenteredRef = useRef(false);
+const centeredOnRef = useRef<number | 'origin' | null>(null);
 
-  useLayoutEffect(() => {
-    const container = containerRef.current;
-    if (!container || hasCenteredRef.current) { return; }
+useLayoutEffect(() => {
+  const container = containerRef.current;
+  if (!container) { return; }
+
+  // Center the origin once so the canvas is always visible
+  if (centeredOnRef.current === null) {
     const { clientWidth, clientHeight } = container;
-    setTransform((prev) => ({ ...prev, tx: clientWidth / 2, ty: clientHeight / 2 }));
-    hasCenteredRef.current = true;
-  }, []);
+    setTransform(prev => ({
+      ...prev,
+      tx: clientWidth / 2,
+      ty: clientHeight / 2,
+      scale: 1,
+    }));
+    centeredOnRef.current = 'origin';
+  }
+
+  // Recenter on the active node when it exists and we haven't centered on it yet
+  if (activeNodeId === null || centeredOnRef.current === activeNodeId) { return; }
+
+  const id = Number(activeNodeId);
+  if (!Number.isFinite(id)) { return; }
+
+  const node = nodes.find(n => Number(n.id) === id);
+  if (!node) { return; } // node not present/visible yet
+
+  const el = container.querySelector(
+    `[data-node-id="${id}"]`
+  ) as HTMLElement | null;
+
+  if (!el) { return; } // e.g., filtered out; keep origin
+
+  const w = el.offsetWidth;
+  const h = el.offsetHeight;
+
+  // node.x/y are top-left in world coords → center of the card
+  const wx = node.x + w / 2;
+  const wy = node.y + h / 2;
+
+  const { clientWidth, clientHeight } = container;
+  setTransform({
+    scale: 1,
+    tx: clientWidth / 2 - wx,
+    ty: clientHeight / 2 - wy,
+  });
+
+  centeredOnRef.current = id;
+}, [nodes, activeNodeId]);
 
   // Panning state: track whether the user is currently panning and the
   // origin of the pan gesture. We store the starting pointer position
@@ -391,8 +427,8 @@ function DraggableNode({
     // with false to notify the parent about the closure.
     if (!errorExpanded && !outputExpanded) { return; }
     const closeOnAnyPointerDown = () => {
-      if (errorExpanded) onToggleError(false);
-      if (outputExpanded) onToggleOutput(false);
+      if (errorExpanded) { onToggleError(false); }
+      if (outputExpanded) { onToggleOutput(false); }
     };
     window.addEventListener("pointerdown", closeOnAnyPointerDown, true);
     return () => window.removeEventListener("pointerdown", closeOnAnyPointerDown, true);
@@ -452,6 +488,7 @@ function DraggableNode({
     <Card
       ref={nodeRef}
       className="canvas-node"
+      data-node-id={node.id}
       onDoubleClick={(e) => { e.stopPropagation(); onSelect?.(); }}
       onPointerDown={handlePointerDown}
       onPointerMove={handlePointerMove}

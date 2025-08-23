@@ -206,7 +206,7 @@ export async function activate(context: vscode.ExtensionContext) {
     context.subscriptions.push(
         vscode.commands.registerCommand('extension.showD3Graph', (treeData = {}, activeNode = {}) => {
             if (graphView) {
-                graphView.reveal(vscode.ViewColumn.One);
+                graphView.reveal(vscode.ViewColumn.Two);
                 graphView.webview.postMessage({ command: 'updateGraph', treeData, activeNode });
                 return;
             }
@@ -214,7 +214,7 @@ export async function activate(context: vscode.ExtensionContext) {
             graphView = vscode.window.createWebviewPanel(
                 'd3Graph',
                 'Canvas',
-                vscode.ViewColumn.One,
+                vscode.ViewColumn.Two,
                 {
                     enableScripts: true,
 					//retainContextWhenHidden supposedly can be resource hungry
@@ -286,6 +286,9 @@ export async function activate(context: vscode.ExtensionContext) {
 							break;
 						case 'hideNode':
 							provider.receiveInformation("hideNode", message.nodeId);
+							break;
+						case 'updateCardExpandState':
+							provider.receiveInformation("updateExpandState", {nodeId: message.nodeId, expandState: message.expandState});
 							break;
                     }
                 },
@@ -412,7 +415,7 @@ export async function activate(context: vscode.ExtensionContext) {
 			ignoreFocusOut: true,
 			validateInput: (v) => v.trim().startsWith('sk-') ? undefined : 'Key should start with "sk-".'
 		});
-		if (!input) return;
+		if (!input) { return; }
 		await context.secrets.store('openai.apiKey', input.trim());
 		vscode.window.showInformationMessage('OpenAI API key saved securely.');
 		})
@@ -1034,9 +1037,9 @@ function clearDirectory(dirPath: string) {
 //TODO REMOVE THIS
 async function getOpenAIKey(ctx: vscode.ExtensionContext): Promise<string | undefined> {
 	const fromSecrets = await ctx.secrets.get('openai.apiKey');
-	if (fromSecrets) return fromSecrets;
+	if (fromSecrets) { return fromSecrets; }
   
-	if (process.env.OPENAI_API_KEY?.trim()) return process.env.OPENAI_API_KEY.trim();
+	if (process.env.OPENAI_API_KEY?.trim()) { return process.env.OPENAI_API_KEY.trim(); }
   
 	const input = await vscode.window.showInputBox({
 	  prompt: 'Enter your OpenAI API key to enable change summaries',
@@ -1044,7 +1047,7 @@ async function getOpenAIKey(ctx: vscode.ExtensionContext): Promise<string | unde
 	  password: true,
 	  ignoreFocusOut: true
 	});
-	if (!input?.trim()) return;
+	if (!input?.trim()) { return; }
 	await ctx.secrets.store('openai.apiKey', input.trim());
 	vscode.window.showInformationMessage('OpenAI API key saved securely.');
 	return input.trim();
