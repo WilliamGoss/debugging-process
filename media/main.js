@@ -152,7 +152,8 @@
                     // if viewId is blank or not set to view2, it means a bug hasn't been declared yet
                     // it should return as we do not want nodes created until a bug is declared
                     if (viewId === '' || viewId !== "view2") { return; }
-                    let newNode = { text: "Generating summary...", id: nodeCount, commitId: "", branchId: "", x: nodes[activeNode].x + 50, y: nodes[activeNode].y + 50, children: [], visible: true, runOutput: runData.stdout, runError: runData.stderr, diffs: null };
+                    let newYValue = nodes[activeNode].y + 10;
+                    let newNode = { text: "Generating summary...", id: nodeCount, commitId: "", branchId: "", x: nodes[activeNode].x, y: newYValue, children: [], visible: true, runOutput: runData.stdout, runError: runData.stderr, diffs: null };
                     //change active node to the new node
                     let newActiveNode = nodeCount;
                     nodes[nodeCount] = newNode;
@@ -248,7 +249,7 @@
         const textAreaObject = document.querySelector('#view1 textarea');
         const userIssueText = textAreaObject.value;
         let newNodes = {};
-        newNodes[0] = { text: userIssueText, id: 0, commitId: "", branchId: "", x: 250, y: 250, children: [], visible: true, runOutput: null, runError: null, diffs: null };
+        newNodes[0] = { text: userIssueText, id: 0, commitId: "", branchId: "", x: 0, y: 0, children: [], visible: true, runOutput: null, runError: null, diffs: null };
         nodeCount = nodeCount + 1;
         //update the local global variables: nodes, activeNode, root
         nodes = newNodes;
@@ -298,29 +299,6 @@
         nodes[activeNode].text = event.target.value;
         vscode.setState({ root: root, nodeCount: nodeCount, activeNode: activeNode, nodes: nodes });
         vscode.postMessage({ type: 'updateNodeText', command: "showD3Graph", newText: event.target.value, activeNode: activeNode });
-    }
-
-    //check if any children have commits
-    function checkChildCommits(node) {
-        let childList = node.children;
-        let check = false;
-        for (const child of childList) {
-            if (nodes[child].commitId !== "") {
-                //a child has a commit, so disable saving on the parent
-                const saveExplorationButton = document.getElementById('saveExploration');
-                if (saveExplorationButton) {
-                    saveExplorationButton.disabled = true;
-                    check = true;
-                    break;
-                }
-            }
-        }
-        if (!check) {
-            const saveExplorationButton = document.getElementById('saveExploration');
-            if (saveExplorationButton) {
-                saveExplorationButton.disabled = false;
-            }
-        }
     }
 
 

@@ -20,6 +20,27 @@ type Node = {
   y: number;
   runOutput: string | null;
   runError: string | null;
+  /**
+   * Indicates whether the node's runtime info (output/error panels) is
+   * currently expanded. When true the card will show the runOutput
+   * and runError fields. Persisting this flag on the node allows
+   * callers (e.g. the parent React app) to remember the expanded
+   * state across renders and even across sessions when coupled with
+   * localStorage or extension backed persistence.
+   */
+  expanded?: boolean;
+  /**
+   * Indicates whether the output panel overlay is expanded. When true
+   * the runOutput overlay is visible. This property must be
+   * preserved on the node for persistence.
+   */
+  outputExpanded?: boolean;
+  /**
+   * Indicates whether the error panel overlay is expanded. When true
+   * the runError overlay is visible. This property must be
+   * preserved on the node for persistence.
+   */
+  errorExpanded?: boolean;
 };
 
 /**
@@ -47,9 +68,34 @@ type Props = {
   onNodeDragEnd?: (id: number, x: number, y: number) => void;
   activeNodeId?: number | null;
   onActiveNodeChange?: (id: number) => void;
+  /**
+   * Callback fired whenever a node's expanded state is toggled.  The
+   * caller can update its stored node list accordingly and persist
+   * the state.  The boolean indicates the new expanded value.
+   */
+  onNodeExpansionChange?: (id: number, expanded: boolean) => void;
+  /**
+   * Callback fired whenever a node's output overlay expanded state is
+   * toggled.  When true the output overlay should be visible.
+   */
+  onNodeOutputExpansionChange?: (id: number, outputExpanded: boolean) => void;
+  /**
+   * Callback fired whenever a node's error overlay expanded state is
+   * toggled.  When true the error overlay should be visible.
+   */
+  onNodeErrorExpansionChange?: (id: number, errorExpanded: boolean) => void;
 };
 
-export default function NodeCanvas({ nodes, onNodePositionChange, onNodeDragEnd, activeNodeId, onActiveNodeChange }: Props) {
+export default function NodeCanvas({
+  nodes,
+  onNodePositionChange,
+  onNodeDragEnd,
+  activeNodeId,
+  onActiveNodeChange,
+  onNodeExpansionChange,
+  onNodeOutputExpansionChange,
+  onNodeErrorExpansionChange,
+}: Props) {
   // Copy incoming nodes into local state so that we can update
   // their coordinates on drag without mutating props. Whenever
   // the nodes prop changes in length (e.g. new nodes added), we
@@ -267,6 +313,12 @@ export default function NodeCanvas({ nodes, onNodePositionChange, onNodeDragEnd,
             onDragEnd={onNodeDragEnd}
             onSelect={() => onActiveNodeChange?.(node.id)}
             scale={transform.scale}
+            expanded={!!node.expanded}
+            outputExpanded={!!node.outputExpanded}
+            errorExpanded={!!node.errorExpanded}
+            onToggleExpand={(val) => onNodeExpansionChange?.(node.id, val)}
+            onToggleOutput={(val) => onNodeOutputExpansionChange?.(node.id, val)}
+            onToggleError={(val) => onNodeErrorExpansionChange?.(node.id, val)}
           />
         ))}
       </div>
@@ -284,7 +336,23 @@ function DraggableNode({
   onDragEnd,
   scale,
   isActive,
-  onSelect
+  onSelect,
+  /**
+   * Whether the node's runtime details (output/error panels) are
+   * currently expanded. This is controlled by the parent component
+   * so that the expanded state can be persisted in the node itself.
+   */
+  expanded,
+  /** Whether the output overlay is expanded. */
+  outputExpanded,
+  /** Whether the error overlay is expanded. */
+  errorExpanded,
+  /** Callback invoked when the expanded flag toggles. */
+  onToggleExpand,
+  /** Callback invoked when the output overlay toggles. */
+  onToggleOutput,
+  /** Callback invoked when the error overlay toggles. */
+  onToggleError,
 }: {
   node: Node;
   isActive?: boolean;
@@ -292,11 +360,17 @@ function DraggableNode({
   onDragEnd?: (id: number, x: number, y: number) => void;
   onSelect?: () => void;
   scale: number;
+  expanded: boolean;
+  outputExpanded: boolean;
+  errorExpanded: boolean;
+  onToggleExpand: (val: boolean) => void;
+  onToggleOutput: (val: boolean) => void;
+  onToggleError: (val: boolean) => void;
 }) {
   const nodeRef = useRef<HTMLDivElement>(null);
-  const [expanded, setExpanded] = useState(false);
-  const [errorExpanded, setErrorExpanded] = useState(false);
-  const [outputExpanded, setOutputExpanded] = useState(false);
+  // Internal refs used to close overlays when clicking outside. We no
+  // longer manage the expanded flags here; instead they are passed
+  // down from the parent and toggled via callbacks.
 
   const hasError = !!(node.runError && String(node.runError).trim().length);
 
@@ -309,14 +383,20 @@ function DraggableNode({
   } | null>(null);
 
   useEffect(() => {
+    // When an overlay is open, clicking anywhere else should close it. We
+    // attach a global pointerdown handler in the capture phase to
+    // intercept the event before it reaches other elements. When both
+    // overlays are closed we remove the handler to avoid unnecessary
+    // work. Note: we intentionally call the provided toggle callbacks
+    // with false to notify the parent about the closure.
     if (!errorExpanded && !outputExpanded) { return; }
     const closeOnAnyPointerDown = () => {
-      setErrorExpanded(false);
-      setOutputExpanded(false);
+      if (errorExpanded) onToggleError(false);
+      if (outputExpanded) onToggleOutput(false);
     };
-    window.addEventListener("pointerdown", closeOnAnyPointerDown, true); // capture
+    window.addEventListener("pointerdown", closeOnAnyPointerDown, true);
     return () => window.removeEventListener("pointerdown", closeOnAnyPointerDown, true);
-  }, [errorExpanded, outputExpanded]);
+  }, [errorExpanded, outputExpanded, onToggleError, onToggleOutput]);
 
   const countLines = (text: string | null | undefined) => {
     // normalize newlines, trim trailing newlines, then count
@@ -400,7 +480,10 @@ function DraggableNode({
       <div
         style={{ position: "absolute", top: 4, right: 4, display: "flex", alignItems: "center", gap: 4 }}
         onPointerDown={(e) => e.stopPropagation()}
-        onClick={(e) => { e.stopPropagation(); setExpanded((prev) => !prev); }}
+        onClick={(e) => {
+          e.stopPropagation();
+          onToggleExpand(!expanded);
+        }}
         role="button"
         aria-label={expanded ? "Collapse runtime info" : "Expand runtime info"}
         title={expanded ? "Collapse" : "Expand"}
@@ -428,38 +511,38 @@ function DraggableNode({
             {/* OUTPUT (click the textarea to expand) */}
 {hasOutput ? (
   <Box sx={{ position: "relative" }} onPointerDown={(e) => e.stopPropagation()}>
-    <TextField
-      label="Output"
-      value={node.runOutput ?? ""}
-      fullWidth
-      multiline
-      minRows={outputRows}
-      maxRows={outputRows}
-      margin="dense"
-      spellCheck={false}
-      inputProps={{ wrap: "off" }} // horizontal scroll
-      onClick={() => setOutputExpanded(true)} // click to expand
-      sx={{
-        "& .MuiInputBase-input": {
-          fontFamily: "ui-monospace, SFMono-Regular, Menlo, monospace",
-          fontSize: "0.85rem",
-          lineHeight: 1.35,
-        },
-        "& .MuiInputBase-inputMultiline": {
-          whiteSpace: "pre",   // no soft wrap; preserve spaces/newlines
-          overflow: "hidden",
-          maxHeight: 220,      // adjust as needed
-          resize: "none",  // let users resize if they want
-        },
-        "& textarea": { overflowX: "auto", resize: "none" }, // show horizontal scrollbar
-      }}
-      InputProps={{ readOnly: true }}
-    />
+            <TextField
+              label="Output"
+              value={node.runOutput ?? ""}
+              fullWidth
+              multiline
+              minRows={outputRows}
+              maxRows={outputRows}
+              margin="dense"
+              spellCheck={false}
+              inputProps={{ wrap: "off" }} // horizontal scroll
+              onClick={() => onToggleOutput(true)} // click to expand
+              sx={{
+                "& .MuiInputBase-input": {
+                  fontFamily: "ui-monospace, SFMono-Regular, Menlo, monospace",
+                  fontSize: "0.85rem",
+                  lineHeight: 1.35,
+                },
+                "& .MuiInputBase-inputMultiline": {
+                  whiteSpace: "pre",   // no soft wrap; preserve spaces/newlines
+                  overflow: "hidden",
+                  maxHeight: 220,      // adjust as needed
+                  resize: "none",  // let users resize if they want
+                },
+                "& textarea": { overflowX: "auto", resize: "none" }, // show horizontal scrollbar
+              }}
+              InputProps={{ readOnly: true }}
+            />
 
     {/* Expanded panel that auto-sizes to content and collapses on click */}
     {outputExpanded && (
       <Box
-        onClick={() => setOutputExpanded(false)}
+        onClick={() => onToggleOutput(false)}
         sx={{
           position: "absolute",
           zIndex: 20,
@@ -522,78 +605,76 @@ function DraggableNode({
 )}
 
   
-{/* ERROR (click the textarea to expand) */}
-<Box sx={{ position: "relative" }} onPointerDown={(e) => e.stopPropagation()}>
-  <TextField
-    label="Error"
-    value={node.runError ?? ""}
-    fullWidth
-    multiline
-    minRows={errorRows}
-    maxRows={errorRows}
-    margin="dense"
-    spellCheck={false}
-    inputProps={{ wrap: "off" }}
-    onClick={() => { if (hasError) { setErrorExpanded(true); }}} // click to expand
-    sx={{
-      "& .MuiInputBase-input": {
-        fontFamily: "ui-monospace, SFMono-Regular, Menlo, monospace",
-        fontSize: "0.85rem",
-        lineHeight: 1.35,
-      },
-      "& .MuiInputBase-inputMultiline": {
-        whiteSpace: "pre",
-        overflow: "hidden",
-        maxHeight: 200,
-        resize: "none",
-      },
-      "& textarea": { overflowX: "auto", resize: "none" },
-      // no extra right padding since there's no chevron now
-    }}
-    InputProps={{ readOnly: true }}
-  />
+{/* ERROR — only render if there is one */}
+{hasError && (
+  <Box sx={{ position: "relative" }} onPointerDown={(e) => e.stopPropagation()}>
+      <TextField
+        label="Error"
+        value={node.runError ?? ""}
+        fullWidth
+        multiline
+        minRows={errorRows}
+        maxRows={errorRows}
+        margin="dense"
+        spellCheck={false}
+        inputProps={{ wrap: "off" }}
+        onClick={() => onToggleError(true)} // safe because hasError is true
+        sx={{
+          "& .MuiInputBase-input": {
+            fontFamily: "ui-monospace, SFMono-Regular, Menlo, monospace",
+            fontSize: "0.85rem",
+            lineHeight: 1.35,
+          },
+          "& .MuiInputBase-inputMultiline": {
+            whiteSpace: "pre",
+            overflow: "hidden",
+            maxHeight: 200,
+            resize: "none",
+          },
+          "& textarea": { overflowX: "auto", resize: "none" },
+        }}
+        InputProps={{ readOnly: true }}
+      />
 
-  {/* Expanded panel that auto-sizes to content and collapses on click */}
-  {errorExpanded && (
-    <Box
-      onClick={() => setErrorExpanded(false)}
-      sx={{
-        position: "absolute",
-        zIndex: 20,
-        top: -8,
-        left: -8,
-
-        display: "inline-block",
-        width: "max-content",
-        height: "max-content",
-        maxWidth: "90vw",
-        maxHeight: "80vh",
-        overflow: "auto",
-
-        bgcolor: "background.paper",
-        border: "1px solid",
-        borderColor: "divider",
-        borderRadius: 1,
-        boxShadow: 6,
-        p: 1,
-      }}
-    >
-      <pre
-        style={{
-          margin: 0,
-          padding: 8,
-          fontFamily: "ui-monospace, SFMono-Regular, Menlo, monospace",
-          fontSize: "0.85rem",
-          lineHeight: 1.35,
-          whiteSpace: "pre",
-          display: "block",
+    {errorExpanded && (
+      <Box
+        onClick={() => onToggleError(false)}
+        sx={{
+          position: "absolute",
+          zIndex: 20,
+          top: -8,
+          left: -8,
+          display: "inline-block",
+          width: "max-content",
+          height: "max-content",
+          maxWidth: "90vw",
+          maxHeight: "80vh",
+          overflow: "auto",
+          bgcolor: "background.paper",
+          border: "1px solid",
+          borderColor: "divider",
+          borderRadius: 1,
+          boxShadow: 6,
+          p: 1,
         }}
       >
-        {node.runError ?? ""}
-      </pre>
-    </Box>
-  )}
-</Box>
+        <pre
+          style={{
+            margin: 0,
+            padding: 8,
+            fontFamily: "ui-monospace, SFMono-Regular, Menlo, monospace",
+            fontSize: "0.85rem",
+            lineHeight: 1.35,
+            whiteSpace: "pre",
+            display: "block",
+          }}
+        >
+          {node.runError ?? ""}
+        </pre>
+      </Box>
+    )}
+  </Box>
+)}
 
           </Box>
         </Collapse>

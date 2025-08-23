@@ -38,6 +38,30 @@ function GraphApp() {
   const [nodes, setNodes] = useState<any[]>([]);
   const [activeNodeId, setActiveNodeId] = useState<number | null>(null);
 
+  /**
+   * A map from node id to its persistable UI state (expanded,
+   * outputExpanded, errorExpanded). This state is loaded from
+   * localStorage on mount so that collapse/expand settings survive
+   * reloading or closing of the webview panel. When any
+   * expansion-related flag changes we update this map and write it
+   * back to localStorage.
+   */
+  const [expansionState, setExpansionState] = useState<Record<number, { expanded?: boolean; outputExpanded?: boolean; errorExpanded?: boolean }>>(() => {
+    if (typeof localStorage === 'undefined') { return {}; }
+    try {
+      const raw = localStorage.getItem('nodeExpansionStates');
+      if (raw) {
+        const parsed = JSON.parse(raw);
+        if (parsed && typeof parsed === 'object') {
+          return parsed;
+        }
+      }
+    } catch (e) {
+      // ignore parse errors
+    }
+    return {};
+  });
+
   // Install a message listener on mount. When a message with a
   // recognised command arrives we update our local state. This
   // pattern matches the way the old D3 graph consumed messages.
@@ -53,7 +77,19 @@ function GraphApp() {
           // preserve all properties as provided so that commit ids,
           // branch ids and visibility flags are retained.
           if (Array.isArray(message.treeData)) {
-            setNodes(message.treeData);
+            // Merge any persisted expansion state into the incoming
+            // nodes. Each node may have undefined for expansion flags
+            // initially; we fill them from our expansionState map to
+            // restore UI state.
+            setNodes(message.treeData.map((node: any) => {
+              const saved = expansionState[node.id] ?? {};
+              return {
+                ...node,
+                expanded: typeof node.expanded === 'boolean' ? node.expanded : saved.expanded,
+                outputExpanded: typeof node.outputExpanded === 'boolean' ? node.outputExpanded : saved.outputExpanded,
+                errorExpanded: typeof node.errorExpanded === 'boolean' ? node.errorExpanded : saved.errorExpanded,
+              };
+            }));
           }
           // Accept either a number id or an object with {id}
           const an = message.activeNode;
@@ -112,11 +148,43 @@ function GraphApp() {
     vscode.postMessage({ command: 'updateActiveNode', node: node });
   };
 
+  /**
+   * Update helper used by expansion toggles. It updates both the
+   * in-memory node list and the persisted expansion map. The
+   * callback receives the property name (expanded, outputExpanded,
+   * errorExpanded) and the new boolean value.
+   */
+  const updateExpansionFlag = (id: number, prop: 'expanded' | 'outputExpanded' | 'errorExpanded', value: boolean) => {
+    // Update nodes state
+    setNodes(prev => prev.map(node => (node.id === id ? { ...node, [prop]: value } : node)));
+    // Update persistent map and localStorage
+    setExpansionState(prev => {
+      const next = { ...prev, [id]: { ...(prev[id] ?? {}), [prop]: value } };
+      try {
+        localStorage.setItem('nodeExpansionStates', JSON.stringify(next));
+      } catch (e) {
+        // ignore storage errors
+      }
+      return next;
+    });
+  };
+
   // Only pass nodes that have not been hidden. The `visible` property
   // defaults to true/undefined when omitted.
   const visibleNodes = nodes.filter(node => node.visible !== false);
 
-  return <NodeCanvas nodes={visibleNodes} activeNodeId={activeNodeId}  onActiveNodeChange={handleActiveNodeChange} onNodePositionChange={handlePositionChange} onNodeDragEnd={handleDragEnd} />;
+  return (
+    <NodeCanvas
+      nodes={visibleNodes}
+      activeNodeId={activeNodeId}
+      onActiveNodeChange={handleActiveNodeChange}
+      onNodePositionChange={handlePositionChange}
+      onNodeDragEnd={handleDragEnd}
+      onNodeExpansionChange={(id, expanded) => updateExpansionFlag(id, 'expanded', expanded)}
+      onNodeOutputExpansionChange={(id, output) => updateExpansionFlag(id, 'outputExpanded', output)}
+      onNodeErrorExpansionChange={(id, error) => updateExpansionFlag(id, 'errorExpanded', error)}
+    />
+  );
 }
 
 // Bootstrapping: render the GraphApp into the root element.
