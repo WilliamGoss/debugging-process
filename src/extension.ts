@@ -289,6 +289,8 @@ export async function activate(context: vscode.ExtensionContext) {
 							break;
 						case 'updateCardExpandState':
 							provider.receiveInformation("updateExpandState", {nodeId: message.nodeId, expandState: message.expandState});
+						case 'updateNodeText':
+							provider.receiveInformation("updateNodeText", {nodeId: message.nodeId, nodeText: message.nodeText });
 							break;
                     }
                 },

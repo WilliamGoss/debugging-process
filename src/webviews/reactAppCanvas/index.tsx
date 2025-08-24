@@ -161,6 +161,10 @@ function GraphApp() {
   onNodeErrorExpansionChange={(id, errorExpanded) =>
     setNodes(prev => prev.map(n => (n.id === id ? { ...n, errorExpanded } : n)))
   }
+  onNodeTextChange={(id, text) => {
+    setNodes(prev => prev.map(n => n.id === id ? { ...n, text } : n));
+    vscode.postMessage({ command: 'updateNodeText', nodeId: id, nodeText: text });
+  }}
 />
   );
 }

@@ -26,6 +26,9 @@ type Props = {
   onNodeExpansionChange?: (id: number, expanded: boolean) => void;
   onNodeOutputExpansionChange?: (id: number, outputExpanded: boolean) => void;
   onNodeErrorExpansionChange?: (id: number, errorExpanded: boolean) => void;
+
+  /** NEW: persist text edits */
+  onNodeTextChange?: (id: number, text: string) => void;
 };
 
 export default function NodeCanvas({
@@ -37,6 +40,7 @@ export default function NodeCanvas({
   onNodeExpansionChange,
   onNodeOutputExpansionChange,
   onNodeErrorExpansionChange,
+  onNodeTextChange, // NEW
 }: Props) {
   // Slightly zoomed-out default
   const INITIAL_SCALE = 0.75;
@@ -75,7 +79,6 @@ export default function NodeCanvas({
     duration = 350
   ) {
     cancelAnim();
-    // Start next frame so we never "snap" in the same frame as layout work
     requestAnimationFrame(() => {
       const start = performance.now();
       const from = { ...latestTransformRef.current };
@@ -102,7 +105,6 @@ export default function NodeCanvas({
     const container = containerRef.current;
     if (!container) { return; }
 
-    // Center the origin once so there's always something visible on first paint
     if (centeredOnRef.current === null) {
       setTransform({
         tx: container.clientWidth / 2,
@@ -112,7 +114,6 @@ export default function NodeCanvas({
       centeredOnRef.current = "origin";
     }
 
-    // Fly to active node (only once per id)
     if (activeNodeId === null || centeredOnRef.current === activeNodeId) { return; }
 
     const id = Number(activeNodeId);
@@ -121,15 +122,12 @@ export default function NodeCanvas({
     const node = nodes.find((n) => Number(n.id) === id);
     if (!node) { return; }
 
-    // Avoid DOM reads: known card size
     const CARD_W = 250;
     const CARD_H = 100;
 
-    // world center of the card
     const wx = node.x + CARD_W / 2;
     const wy = node.y + CARD_H / 2;
 
-    // use the *current* scale, don't snap
     const s = latestTransformRef.current.scale;
     const { clientWidth, clientHeight } = container;
 
@@ -143,27 +141,19 @@ export default function NodeCanvas({
     centeredOnRef.current = id;
   }, [nodes, activeNodeId]);
 
-  // --- Pan/zoom (cancel any running tween on user interaction) --------------
+  // --- Pan/zoom --------------------------------------------------------------
 
   const isPanningRef = useRef(false);
   const panStartRef = useRef<{ x: number; y: number; tx: number; ty: number }>({
-    x: 0,
-    y: 0,
-    tx: 0,
-    ty: 0,
+    x: 0, y: 0, tx: 0, ty: 0,
   });
 
   const handlePointerDown = (e: React.PointerEvent<HTMLDivElement>) => {
     if (e.button !== 0) { return; }
-    if (e.currentTarget !== e.target) { return; } // ignore drags on nodes
+    if (e.currentTarget !== e.target) { return; }
     cancelAnim();
     isPanningRef.current = true;
-    panStartRef.current = {
-      x: e.clientX,
-      y: e.clientY,
-      tx: transform.tx,
-      ty: transform.ty,
-    };
+    panStartRef.current = { x: e.clientX, y: e.clientY, tx: transform.tx, ty: transform.ty };
     e.currentTarget.setPointerCapture(e.pointerId);
   };
 
@@ -171,11 +161,7 @@ export default function NodeCanvas({
     if (!isPanningRef.current) { return; }
     const dx = e.clientX - panStartRef.current.x;
     const dy = e.clientY - panStartRef.current.y;
-    setTransform((prev) => ({
-      ...prev,
-      tx: panStartRef.current.tx + dx,
-      ty: panStartRef.current.ty + dy,
-    }));
+    setTransform((prev) => ({ ...prev, tx: panStartRef.current.tx + dx, ty: panStartRef.current.ty + dy }));
   };
 
   const handlePointerUp = (e: React.PointerEvent<HTMLDivElement>) => {
@@ -258,15 +244,9 @@ export default function NodeCanvas({
       <div
         style={{ position: "absolute", top: 10, left: 10, zIndex: 1000, display: "flex", gap: 4 }}
       >
-        <button onClick={() => zoomRelative(1.1)} aria-label="Zoom in">
-          +
-        </button>
-        <button onClick={() => zoomRelative(1 / 1.1)} aria-label="Zoom out">
-          -
-        </button>
-        <button onClick={resetView} aria-label="Reset view">
-          ×
-        </button>
+        <button onClick={() => zoomRelative(1.1)} aria-label="Zoom in">+</button>
+        <button onClick={() => zoomRelative(1 / 1.1)} aria-label="Zoom out">-</button>
+        <button onClick={resetView} aria-label="Reset view">×</button>
       </div>
 
       <div
@@ -293,6 +273,7 @@ export default function NodeCanvas({
             onToggleExpand={(val) => onNodeExpansionChange?.(node.id, val)}
             onToggleOutput={(val) => onNodeOutputExpansionChange?.(node.id, val)}
             onToggleError={(val) => onNodeErrorExpansionChange?.(node.id, val)}
+            onChangeText={(id, text) => onNodeTextChange?.(id, text)} // NEW
           />
         ))}
       </div>
@@ -315,6 +296,7 @@ function DraggableNode({
   onToggleExpand,
   onToggleOutput,
   onToggleError,
+  onChangeText, // NEW
 }: {
   node: Node;
   isActive?: boolean;
@@ -328,15 +310,23 @@ function DraggableNode({
   onToggleExpand: (val: boolean) => void;
   onToggleOutput: (val: boolean) => void;
   onToggleError: (val: boolean) => void;
+  onChangeText: (id: number, text: string) => void; // NEW
 }) {
   const hasError = !!(node.runError && String(node.runError).trim().length);
 
-  const dragRef = useRef<{
-    startX: number;
-    startY: number;
-    origX: number;
-    origY: number;
-  } | null>(null);
+  // --- Drag & long-press state (card-scoped) ---
+  const cardRef = useRef<HTMLDivElement | null>(null);
+  const textWrapRef = useRef<HTMLDivElement | null>(null);
+
+  const dragRef = useRef<{ startX: number; startY: number; origX: number; origY: number } | null>(null);
+  const isDraggingRef = useRef(false);
+  const pointerDownRef = useRef(false);
+
+  const longPressTimerRef = useRef<number | null>(null);
+  const longPressEligibleRef = useRef(false);
+
+  const PRESS_MS = 450;
+  const MOVE_CANCEL_PX = 4;
 
   useEffect(() => {
     if (!errorExpanded && !outputExpanded) { return; }
@@ -356,29 +346,64 @@ function DraggableNode({
   const outputRows = Math.min(5, countLines(node.runOutput));
   const errorRows = Math.min(5, countLines(node.runError));
 
+  const cancelLongPress = () => {
+    if (longPressTimerRef.current !== null) {
+      clearTimeout(longPressTimerRef.current);
+      longPressTimerRef.current = null;
+    }
+  };
+
+  // ---- Card pointer handlers: handle drag + long-press here ----
   const handlePointerDown = (e: React.PointerEvent<HTMLDivElement>) => {
-    if (e.button !== 0) { return; }
-    e.stopPropagation();
-    dragRef.current = {
-      startX: e.clientX,
-      startY: e.clientY,
-      origX: node.x,
-      origY: node.y,
-    };
-    e.currentTarget.setPointerCapture(e.pointerId);
+    if (e.button !== 0) return;
+    e.stopPropagation(); // avoid canvas panning
+    const targetEl = e.target as Element | null;
+    longPressEligibleRef.current = !!(textWrapRef.current && targetEl && textWrapRef.current.contains(targetEl));
+
+    dragRef.current = { startX: e.clientX, startY: e.clientY, origX: node.x, origY: node.y };
+    isDraggingRef.current = false;
+    pointerDownRef.current = true;
+
+    (e.currentTarget as HTMLDivElement).setPointerCapture(e.pointerId);
+
+    // arm long-press only if we started over text
+    cancelLongPress();
+    if (longPressEligibleRef.current) {
+      longPressTimerRef.current = window.setTimeout(() => {
+        // Only open if still down, not dragging, and still eligible
+        if (!pointerDownRef.current || isDraggingRef.current || !longPressEligibleRef.current) return;
+        dragRef.current = null;
+        try { cardRef.current?.releasePointerCapture(e.pointerId); } catch { /* ignore */ }
+        setIsEditing(true);
+      }, PRESS_MS);
+    }
   };
 
   const handlePointerMove = (e: React.PointerEvent<HTMLDivElement>) => {
-    if (!dragRef.current) { return; }
+    if (!dragRef.current) return;
     const dx = (e.clientX - dragRef.current.startX) / scale;
     const dy = (e.clientY - dragRef.current.startY) / scale;
+
+    if (!isDraggingRef.current && (Math.abs(dx) > MOVE_CANCEL_PX || Math.abs(dy) > MOVE_CANCEL_PX)) {
+      isDraggingRef.current = true;
+      cancelLongPress(); // any real movement cancels long-press
+    }
+
     const newX = dragRef.current.origX + dx;
     const newY = dragRef.current.origY + dy;
     onUpdatePosition(node.id, newX, newY);
   };
 
   const handlePointerUp = (e: React.PointerEvent<HTMLDivElement>) => {
-    if (!dragRef.current) { return; }
+    cancelLongPress();
+    pointerDownRef.current = false;
+
+    if (!dragRef.current) {
+      // we might have entered edit mode via long-press
+      try { (e.currentTarget as HTMLDivElement).releasePointerCapture(e.pointerId); } catch {}
+      return;
+    }
+
     const dx = (e.clientX - dragRef.current.startX) / scale;
     const dy = (e.clientY - dragRef.current.startY) / scale;
     const finalX = dragRef.current.origX + dx;
@@ -388,23 +413,57 @@ function DraggableNode({
     onDragEnd?.(node.id, finalX, finalY);
 
     dragRef.current = null;
-    e.currentTarget.releasePointerCapture(e.pointerId);
+    (e.currentTarget as HTMLDivElement).releasePointerCapture(e.pointerId);
+  };
+
+  const handlePointerCancel = (e: React.PointerEvent<HTMLDivElement>) => {
+    cancelLongPress();
+    pointerDownRef.current = false;
+    dragRef.current = null;
+    try { (e.currentTarget as HTMLDivElement).releasePointerCapture(e.pointerId); } catch {}
   };
 
   const hasOutput = !!(node.runOutput && String(node.runOutput).trim().length);
 
+  // ---------- Inline editing state & caret-at-end ----------
+  const [isEditing, setIsEditing] = useState(false);
+  const [draft, setDraft] = useState(node.text);
+  const editRef = useRef<HTMLInputElement | HTMLTextAreaElement>(null);
+
+  useEffect(() => {
+    if (!isEditing) { setDraft(node.text); }
+  }, [node.text, isEditing]);
+
+  useEffect(() => {
+    if (!isEditing) return;
+    const raf = requestAnimationFrame(() => {
+      const el = editRef.current;
+      if (!el) return;
+      try { el.focus({ preventScroll: true }); } catch { el.focus(); }
+      const len = (el as HTMLInputElement | HTMLTextAreaElement).value.length;
+      try { (el as HTMLInputElement | HTMLTextAreaElement).setSelectionRange(len, len); }
+      catch { (el as any).selectionStart = (el as any).selectionEnd = len; }
+    });
+    return () => cancelAnimationFrame(raf);
+  }, [isEditing]);
+
+  const commit = (save: boolean) => {
+    const next = save ? draft : node.text;
+    setIsEditing(false);
+    setDraft(next);
+    if (save && next !== node.text) onChangeText(node.id, next);
+  };
+
   return (
     <Card
+      ref={cardRef}
       className="canvas-node"
       data-node-id={node.id}
-      onDoubleClick={(e) => {
-        e.stopPropagation();
-        onSelect?.();
-      }}
+      onDoubleClick={(e) => { e.stopPropagation(); onSelect?.(); }}
       onPointerDown={handlePointerDown}
       onPointerMove={handlePointerMove}
       onPointerUp={handlePointerUp}
-      onPointerCancel={handlePointerUp}
+      onPointerCancel={handlePointerCancel}
       sx={{
         width: 250,
         p: 1,
@@ -428,10 +487,7 @@ function DraggableNode({
       <div
         style={{ position: "absolute", top: 4, right: 4, display: "flex", alignItems: "center", gap: 4 }}
         onPointerDown={(e) => e.stopPropagation()}
-        onClick={(e) => {
-          e.stopPropagation();
-          onToggleExpand(!expanded);
-        }}
+        onClick={(e) => { e.stopPropagation(); onToggleExpand(!expanded); }}
         role="button"
         aria-label={expanded ? "Collapse runtime info" : "Expand runtime info"}
         title={expanded ? "Collapse" : "Expand"}
@@ -449,9 +505,34 @@ function DraggableNode({
       </div>
 
       <CardContent sx={{ p: 1, pt: 0.75, "&:last-child": { pb: 1 } }}>
-        <Typography variant="body1" sx={{ pr: 2 }}>
-          {node.text}
-        </Typography>
+        {/* Text block: no handlers needed; card handles both drag & long-press */}
+        {!isEditing ? (
+          <div ref={textWrapRef} style={{ cursor: "text" }}>
+            <Typography variant="body1" sx={{ pr: 2, whiteSpace: "pre-wrap", wordBreak: "break-word" }}>
+              {node.text}
+            </Typography>
+          </div>
+        ) : (
+          <TextField
+            autoFocus
+            inputRef={editRef}
+            fullWidth
+            multiline
+            minRows={1}
+            value={draft}
+            onChange={(e) => setDraft(e.target.value)}
+            onPointerDown={(e) => e.stopPropagation()}
+            onPointerMove={(e) => e.stopPropagation()}
+            onPointerUp={(e) => e.stopPropagation()}
+            onBlur={() => commit(true)}
+            onKeyDown={(e) => {
+              if (e.key === "Enter" && !e.shiftKey) { e.preventDefault(); commit(true); }
+              else if (e.key === "Escape") { e.preventDefault(); commit(false); }
+            }}
+            inputProps={{ spellCheck: false }}
+            sx={{ "& .MuiInputBase-input": { fontSize: "1rem", lineHeight: 1.4 } }}
+          />
+        )}
 
         <Collapse in={expanded} unmountOnExit sx={{ mt: 1 }}>
           <Box onPointerDown={(e) => e.stopPropagation()}>

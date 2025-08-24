@@ -42,20 +42,9 @@
           <br/>
       </div>
       <div id="view2" class="hidden">
-          <p>
-    Briefly write what you attempted in this exploration.
-    </p>
-    <br/>
-          <br/>
-    <label for="new-exploration">Actions Taken</label>
-    <textarea id="explorationText" name="exploration" cols="40" rows="5"></textarea>
-          <br/>
-          <br/>
-          <br/>
-          <hr/>
       <br/>
-    <button id="showTreeButton">Show Graph</button>
-    <br/>
+      <button id="showTreeButton">Show Graph</button>
+      <br/>
           <br/>
           <hr/>
           <br/>
@@ -87,8 +76,6 @@
   /* Overall View */
   // @ts-ignore: Object is possibly 'null'.
   document.getElementById('showTreeButton').addEventListener('click', () => showTree(nodes));
-  //update node text
-  document.getElementById('explorationText').addEventListener('input', (event) => updateText(event));
 
   /* TESTING ONLY */
   //document.getElementById('clearState')?.addEventListener('click', () => emptyState());
@@ -326,6 +313,14 @@
                   vscode.setState({ root: root, nodeCount: nodeCount, activeNode: activeNode, nodes: nodes });
                   break;
               }
+            case 'updateNodeText':
+              {
+                const nodeToUpdate = message.data.nodeId;
+                const newText = message.data.nodeText;
+                nodes[nodeToUpdate].text = newText;
+                vscode.setState({ root: root, nodeCount: nodeCount, activeNode: activeNode, nodes: nodes });
+                break;
+              }
       }
   });
 
@@ -378,13 +373,6 @@
       // If you also have clampHunk, you can do: const hunks = (node.hunks||[]).map(h => clampHunk(h, 100));
       renderDiff(node.diffs || [], diffContainer);
   }
-
-  function updateText(event) {
-      nodes[activeNode].text = event.target.value;
-      vscode.setState({ root: root, nodeCount: nodeCount, activeNode: activeNode, nodes: nodes });
-      vscode.postMessage({ type: 'updateNodeText', command: "showD3Graph", newText: event.target.value, activeNode: activeNode });
-  }
-
 
   //diff object into hunks
   function buildHunksFromParts(parts, context = 2) {
