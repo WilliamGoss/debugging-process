@@ -323,6 +323,8 @@ function DraggableNode({
   const PRESS_MS = 450;
   const MOVE_CANCEL_PX = 4;
 
+  const HIDE_OUTPUT_FOR_ID = 0;
+
   useEffect(() => {
     if (!errorExpanded && !outputExpanded) return;
     const closeOnAnyPointerDown = () => {
@@ -488,6 +490,7 @@ function DraggableNode({
   };
 
   const hasOutput = !!(node.runOutput && String(node.runOutput).trim().length);
+  const hideOutput = node.id === HIDE_OUTPUT_FOR_ID;
 
   // ---------- Inline editing ----------
   const [isEditing, setIsEditing] = useState(false);
@@ -602,108 +605,82 @@ function DraggableNode({
 
         <Collapse in={expanded} unmountOnExit sx={{ mt: 1 }}>
           <Box>
-            {hasOutput ? (
-              <Box sx={{ position: "relative" }}>
-                {/* Drag surface + open-on-tap marker */}
-                <div
-                  data-drag-surface="true"
-                  data-open-on-tap="output"
-                  style={{ userSelect: "none" }}
-                >
-                  <TextField
-                    label="Output"
-                    value={node.runOutput ?? ""}
-                    fullWidth
-                    multiline
-                    minRows={outputRows}
-                    maxRows={outputRows}
-                    margin="dense"
-                    spellCheck={false}
-                    inputProps={{ wrap: "off" }}
-                    // No onClick needed — tap handled in handlePointerUp via data-open-on-tap
-                    sx={{
-                      "& .MuiInputBase-input": {
-                        fontFamily: "ui-monospace, SFMono-Regular, Menlo, monospace",
-                        fontSize: "0.85rem",
-                        lineHeight: 1.35,
-                        cursor: "inherit",
-                      },
-                      "& .MuiInputBase-inputMultiline": {
-                        whiteSpace: "pre",
-                        overflow: "hidden",
-                        maxHeight: 220,
-                        resize: "none",
-                        cursor: "inherit",
-                      },
-                      "& textarea": { overflowX: "auto", resize: "none" },
-                    }}
-                    InputProps={{ readOnly: true }}
-                  />
-                </div>
+            {/* Output section */}
+{!hideOutput && (
+  hasOutput ? (
+    <Box sx={{ position: "relative" }}>
+      <div
+        data-drag-surface="true"
+        data-open-on-tap="output"
+        style={{ userSelect: "none" }}
+      >
+        <TextField
+          label="Output"
+          value={node.runOutput ?? ""}
+          fullWidth
+          multiline
+          minRows={outputRows}
+          maxRows={outputRows}
+          margin="dense"
+          spellCheck={false}
+          inputProps={{ wrap: "off" }}
+          sx={{
+            "& .MuiInputBase-input": {
+              fontFamily: "ui-monospace, SFMono-Regular, Menlo, monospace",
+              fontSize: "0.85rem",
+              lineHeight: 1.35,
+              cursor: "inherit",
+            },
+            "& .MuiInputBase-inputMultiline": {
+              whiteSpace: "pre",
+              overflow: "hidden",
+              maxHeight: 220,
+              resize: "none",
+              cursor: "inherit",
+            },
+            "& textarea": { overflowX: "auto", resize: "none" },
+          }}
+          InputProps={{ readOnly: true }}
+        />
+      </div>
 
-                {outputExpanded && (
-                  <Box
-                    onClick={() => onToggleOutput(false)}
-                    sx={{
-                      position: "absolute",
-                      zIndex: 20,
-                      top: -8,
-                      left: -8,
-                      display: "inline-block",
-                      width: "max-content",
-                      height: "max-content",
-                      maxWidth: "90vw",
-                      maxHeight: "80vh",
-                      overflow: "auto",
-                      bgcolor: "background.paper",
-                      border: "1px solid",
-                      borderColor: "divider",
-                      borderRadius: 1,
-                      boxShadow: 6,
-                      p: 1,
-                    }}
-                  >
-                    <pre
-                      style={{
-                        margin: 0,
-                        padding: 8,
-                        fontFamily: "ui-monospace, SFMono-Regular, Menlo, monospace",
-                        fontSize: "0.85rem",
-                        lineHeight: 1.35,
-                        whiteSpace: "pre",
-                        display: "block",
-                      }}
-                    >
-                      {node.runOutput ?? ""}
-                    </pre>
-                  </Box>
-                )}
-              </Box>
-            ) : (
-              <div data-drag-surface="true" style={{ userSelect: "none" }}>
-                <TextField
-                  label="Output"
-                  placeholder="No output was detected"
-                  fullWidth
-                  margin="dense"
-                  disabled
-                  sx={{
-                    "& .MuiInputBase-input": {
-                      fontStyle: "italic",
-                      fontFamily: "ui-monospace, SFMono-Regular, Menlo, monospace",
-                      fontSize: "0.85rem",
-                      lineHeight: 1.4,
-                    },
-                    "& .MuiInputBase-input::placeholder": {
-                      fontStyle: "italic",
-                      color: "text.disabled",
-                      opacity: 1,
-                    },
-                  }}
-                />
-              </div>
-            )}
-
+      {outputExpanded && (
+        <Box
+          onClick={() => onToggleOutput(false)}
+          sx={{
+            position: "absolute",
+            zIndex: 20,
+            top: -8,
+            left: -8,
+            display: "inline-block",
+            width: "max-content",
+            height: "max-content",
+            maxWidth: "90vw",
+            maxHeight: "80vh",
+            overflow: "auto",
+            bgcolor: "background.paper",
+            border: "1px solid",
+            borderColor: "divider",
+            borderRadius: 1,
+            boxShadow: 6,
+            p: 1,
+          }}
+        >
+          <pre style={{
+            margin: 0, padding: 8, fontFamily: "ui-monospace, SFMono-Regular, Menlo, monospace",
+            fontSize: "0.85rem", lineHeight: 1.35, whiteSpace: "pre", display: "block",
+          }}>
+            {node.runOutput ?? ""}
+          </pre>
+        </Box>
+      )}
+    </Box>
+  ) : (
+    // If you also want to hide the "No output detected" placeholder when there's no output:
+    null
+    // Or keep the placeholder for other nodes by using the original disabled TextField here.
+  )
+)}
             {hasError && (
               <Box sx={{ position: "relative" }}>
                 <div

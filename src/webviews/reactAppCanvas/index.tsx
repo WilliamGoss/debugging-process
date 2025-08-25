@@ -1,4 +1,4 @@
-import React, { useEffect, useState } from 'react';
+import React, { useEffect, useRef, useState } from 'react';
 import ReactDOM from 'react-dom/client';
 import NodeCanvas from './App';
 
@@ -15,164 +15,188 @@ const vscode: VsCodeApi = (typeof acquireVsCodeApi === 'function')
   : { postMessage: () => {}, getState: () => undefined, setState: () => {} };
 
 /**
- * Entrypoint for the React-based graph canvas. Instead of defining a
- * static set of nodes, this file listens for messages from the
- * extension and updates its internal state accordingly. It mirrors
- * the message-based workflow used by the original D3 visualization.
+ * Entrypoint for the React-based graph canvas.
  */
 
-// Obtain the VS Code API. In the webview context this global is
-// available and allows the webview to post messages back to the
-// extension. We avoid specifying a type here to keep the code
-// framework-agnostic.
-//const vscode = acquireVsCodeApi();
-
-// A thin wrapper component that manages the array of nodes and
-// coordinates updates. It receives messages from the extension via
-// window.postMessage and forwards drag events back to the extension.
 function GraphApp() {
-  // The list of nodes currently displayed. Each node should include
-  // properties such as id, text, x, y, output, error and may also
-  // include commitId/branchId/children/visible as provided by the
-  // extension.
-  const [nodes, setNodes] = useState<any[]>([]);
-  const [activeNodeId, setActiveNodeId] = useState<number | null>(null);
+  // --- hydrate from VS Code webview state (survives refresh/restoration of the view) ---
+  const saved = (() => {
+    try { return vscode.getState?.() || {}; } catch { return {}; }
+  })();
 
-  //?
-  const [expansionState, setExpansionState] = useState<Record<number, { expanded?: boolean }>>(() => {
-    try {
-      return JSON.parse(localStorage.getItem('nodeExpansionStates') || '{}') || {};
-    } catch { return {}; }
-  });
-  
-  const persistExpanded = (id: number, expanded: boolean) => {
-    setExpansionState(prev => {
-      const next = { ...prev, [id]: { ...(prev[id] || {}), expanded } };
-      try { localStorage.setItem('nodeExpansionStates', JSON.stringify(next)); } catch {}
-      return next;
-    });
+  const [nodes, setNodes] = useState<any[]>(Array.isArray(saved?.nodes) ? saved.nodes : []);
+  const [activeNodeId, setActiveNodeId] = useState<number | null>(
+    typeof saved?.activeNodeId === 'number' ? saved.activeNodeId : null
+  );
+
+  // Keep a ref to latest nodes to avoid stale closures in merges
+  const nodesRef = useRef<any[]>(nodes);
+  useEffect(() => { nodesRef.current = nodes; }, [nodes]);
+
+  // Persist nodes + active id to VS Code state whenever they change
+  useEffect(() => {
+    try { vscode.setState({ nodes, activeNodeId }); } catch {}
+  }, [nodes, activeNodeId]);
+
+  // --- text cache fallback (localStorage) in case backend omits node.text ---
+  const textCacheRef = useRef<Record<string, string>>({});
+  useEffect(() => {
+    try { textCacheRef.current = JSON.parse(localStorage.getItem('nodeTextById') || '{}') || {}; }
+    catch { textCacheRef.current = {}; }
+  }, []);
+  const cacheText = (id: number, text: string) => {
+    textCacheRef.current[String(id)] = text;
+    try { localStorage.setItem('nodeTextById', JSON.stringify(textCacheRef.current)); } catch {}
   };
 
-  // Install a message listener on mount. When a message with a
-  // recognised command arrives we update our local state. This
-  // pattern matches the way the old D3 graph consumed messages.
+  // --- message pump ---
   useEffect(() => {
     function handleMessage(event: MessageEvent) {
       const message = event.data;
-      if (!message || typeof message !== 'object') {
-        return;
-      }
+      if (!message || typeof message !== 'object') return;
+
       switch (message.command) {
         case 'updateGraph': {
           if (Array.isArray(message.treeData)) {
             setNodes(prev => {
               const prevMap = new Map(prev.map(n => [n.id, n]));
-              return message.treeData.map((n: any) => {
-                const prevN = prevMap.get(n.id);
-                return {
-                  ...n,
-                  expanded: (typeof n.expanded === 'boolean') ? n.expanded : !!prevN?.expanded,
-                  // overlays default closed on load
-                  outputExpanded: false,
-                  errorExpanded:  false,
-                };
+
+              const mergedNodes = message.treeData.map((incoming: any) => {
+                const id = incoming.id;
+                const prevN = prevMap.get(id);
+
+                // Start from previous if present, otherwise a fresh object.
+                const merged: any = prevN ? { ...prevN } : {};
+
+                // Copy only defined fields from incoming
+                for (const [k, v] of Object.entries(incoming)) {
+                  if (v !== undefined) (merged as any)[k] = v;
+                }
+
+                // TEXT PRIORITY: incoming.text -> prev.text -> cached text
+                if (incoming.text === undefined) {
+                  if (prevN?.text !== undefined) {
+                    merged.text = prevN.text;
+                  } else {
+                    const cached = textCacheRef.current[String(id)];
+                    if (typeof cached === 'string') merged.text = cached;
+                  }
+                }
+
+                // Preserve/restore expanded unless backend explicitly sends it
+                if (typeof incoming.expanded === 'boolean') {
+                  merged.expanded = incoming.expanded;
+                } else if (prevN?.expanded !== undefined) {
+                  merged.expanded = prevN.expanded;
+                //} else if (expansionState[id]?.expanded !== undefined) {
+                  //merged.expanded = !!expansionState[id].expanded;
+                } else {
+                  merged.expanded = !!merged.expanded; // coerce to boolean if present
+                }
+
+                // Overlays default closed on load
+                merged.outputExpanded = false;
+                merged.errorExpanded  = false;
+
+                return merged;
               });
+
+              return mergedNodes;
             });
           }
+
           const an = message.activeNode;
-          if (typeof an === 'number') { setActiveNodeId(an); }
-          else if (an && typeof an.id === 'number') { setActiveNodeId(an.id); }
+          if (typeof an === 'number') setActiveNodeId(an);
+          else if (an && typeof an.id === 'number') setActiveNodeId(an.id);
           break;
         }
+
         case 'updateNodeText': {
-          setNodes(prev => prev.map(node => {
-            return node.id === message.nodeId ? { ...node, text: message.newText } : node;
-          }));
+          // Backend-driven text updates (if any)
+          setNodes(prev => prev.map(node =>
+            node.id === message.nodeId ? { ...node, text: message.newText } : node
+          ));
+          cacheText(message.nodeId, message.newText);
           break;
         }
+
         case 'attachCommit': {
-          setNodes(prev => prev.map(node => {
-            return node.id === message.nodeId ? { ...node, commitId: message.commitId, branchId: message.branchId } : node;
-          }));
+          setNodes(prev => prev.map(node =>
+            node.id === message.nodeId
+              ? { ...node, commitId: message.commitId, branchId: message.branchId }
+              : node
+          ));
           break;
         }
+
         case 'hideNode': {
-          // Mark the node as not visible. We rely on the render
-          // function to filter out nodes with visible=false.
-          setNodes(prev => prev.map(node => {
-            return node.id === message.nodeId ? { ...node, visible: false } : node;
-          }));
+          setNodes(prev => prev.map(node =>
+            node.id === message.nodeId ? { ...node, visible: false } : node
+          ));
           break;
         }
+
         default:
-          // Unknown command; ignore.
           break;
       }
     }
+
     window.addEventListener('message', handleMessage);
     return () => window.removeEventListener('message', handleMessage);
   }, []);
 
-  // Forward position updates to the extension. When a node is
-  // dragged this callback will be invoked by the canvas component.
+  // --- UI event handlers ---
   const handlePositionChange = (id: number, x: number, y: number) => {
     setNodes(prev => prev.map(node => (node.id === id ? { ...node, x, y } : node)));
-    // Inform the extension about the new position so it can persist
-    // the coordinates and update any dependent state.
-    //vscode.postMessage({ command: 'updateXY', nodeId: id, x, y });
+    // vscode.postMessage({ command: 'updateXY', nodeId: id, x, y });
   };
 
-  // only once when drag ends
   const handleDragEnd = (id: number, x: number, y: number) => {
-    // persist or notify extension here
     vscode.postMessage({ command: 'updateXY', nodeId: id, x, y });
   };
 
-  //Changing activeNode
   const handleActiveNodeChange = (id: number) => {
-    const node = nodes.find(n => n.id === id);
+    const node = nodesRef.current.find(n => n.id === id);
     setActiveNodeId(id);
-    vscode.postMessage({ command: 'updateActiveNode', node: node });
+    vscode.postMessage({ command: 'updateActiveNode', node });
   };
 
-  //Handle card exppand
-  //The output or error expansion does not matter for state, since we can always assume it is collapsed on reload.
   const handleCardExpandCollapse = (id: number, expandState: boolean) => {
-    setNodes(prev => prev.map(n => (n.id === id ? { ...n, expanded: expandState } : n)));
+    setNodes(prev => {
+      const next = prev.map(n => (n.id === id ? { ...n, expanded: expandState } : n));   
+      return next;
+    });
     vscode.postMessage({ command: 'updateCardExpandState', nodeId: id, expandState });
   };
 
-  // Only pass nodes that have not been hidden. The `visible` property
-  // defaults to true/undefined when omitted.
   const visibleNodes = nodes.filter(node => node.visible !== false);
 
   return (
     <NodeCanvas
-  nodes={visibleNodes}
-  activeNodeId={activeNodeId}
-  onActiveNodeChange={handleActiveNodeChange}
-  onNodePositionChange={handlePositionChange}
-  onNodeDragEnd={handleDragEnd}
-  onNodeExpansionChange={handleCardExpandCollapse}
-  // (optional) also wire these if you want the overlays:
-  onNodeOutputExpansionChange={(id, outputExpanded) =>
-    setNodes(prev => prev.map(n => (n.id === id ? { ...n, outputExpanded } : n)))
-  }
-  onNodeErrorExpansionChange={(id, errorExpanded) =>
-    setNodes(prev => prev.map(n => (n.id === id ? { ...n, errorExpanded } : n)))
-  }
-  onNodeTextChange={(id, text) => {
-    setNodes(prev => prev.map(n => n.id === id ? { ...n, text } : n));
-    vscode.postMessage({ command: 'updateNodeText', nodeId: id, nodeText: text });
-  }}
-  onNodeColorChange={(id, color) => {
-    setNodes(prev => prev.map(n => (n.id === id ? { ...n, color } : n)));
-    vscode.postMessage({ command: 'updateNodeBackground', nodeId: id, bgColor: color });
-  }}
-/>
+      nodes={visibleNodes}
+      activeNodeId={activeNodeId}
+      onActiveNodeChange={handleActiveNodeChange}
+      onNodePositionChange={handlePositionChange}
+      onNodeDragEnd={handleDragEnd}
+      onNodeExpansionChange={handleCardExpandCollapse}
+      onNodeOutputExpansionChange={(id, outputExpanded) =>
+        setNodes(prev => prev.map(n => (n.id === id ? { ...n, outputExpanded } : n)))
+      }
+      onNodeErrorExpansionChange={(id, errorExpanded) =>
+        setNodes(prev => prev.map(n => (n.id === id ? { ...n, errorExpanded } : n)))
+      }
+      onNodeTextChange={(id, text) => {
+        setNodes(prev => prev.map(n => (n.id === id ? { ...n, text } : n)));
+        cacheText(id, text); // ensure we can restore text across reopen
+        vscode.postMessage({ command: 'updateNodeText', nodeId: id, nodeText: text });
+      }}
+      onNodeColorChange={(id, color) => {
+        setNodes(prev => prev.map(n => (n.id === id ? { ...n, color } : n)));
+        vscode.postMessage({ command: 'updateNodeBackground', nodeId: id, bgColor: color });
+      }}
+    />
   );
 }
 
-// Bootstrapping: render the GraphApp into the root element.
 const root = ReactDOM.createRoot(document.getElementById('root')!);
 root.render(<GraphApp />);
