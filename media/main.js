@@ -208,7 +208,7 @@
                   const newYValue = parentNode ? parentNode.y + cardHeight + MARGIN : 0;
                   // Align the new node horizontally with its parent
                   const newXValue = parentNode ? parentNode.x : 0;
-                  let newNode = { text: "Generating summary...", id: nodeCount, commitId: "", branchId: "", x: newXValue, y: newYValue, children: [], visible: true, runOutput: runData.stdout, runError: runData.stderr, diffs: null, expanded: false };
+                  let newNode = { text: "Generating summary...", id: nodeCount, commitId: "", branchId: "", x: newXValue, y: newYValue, children: [], visible: true, runOutput: runData.stdout, runError: runData.stderr, diffs: null, expanded: false, color: "#FFFFFF" };
                   //change active node to the new node
                   let newActiveNode = nodeCount;
                   nodes[nodeCount] = newNode;
@@ -319,6 +319,19 @@
                 vscode.postMessage({ type: 'showGraph', command: "showD3Graph", treeData: nodeArray, activeNode: activeNode });
                 break;
               }
+            case 'updateNodeBackground':
+              {
+                const nodeId = message.data.nodeId;
+                const bgColor = message.data.bgColor;
+                nodes[nodeId].color = bgColor;
+                vscode.setState({
+                  root: root,
+                  nodeCount: nodeCount,
+                  activeNode: activeNode,
+                  nodes: nodes
+                });
+                break;
+              }
       }
   });
 
@@ -326,7 +339,7 @@
       const textAreaObject = document.querySelector('#view1 textarea');
       const userIssueText = textAreaObject.value;
       let newNodes = {};
-      newNodes[0] = { text: userIssueText, id: 0, commitId: "", branchId: "", x: 0, y: 0, children: [], visible: true, runOutput: null, runError: null, diffs: null, expanded: false };
+      newNodes[0] = { text: userIssueText, id: 0, commitId: "", branchId: "", x: 0, y: 0, children: [], visible: true, runOutput: null, runError: null, diffs: null, expanded: false, color: "#FFFFFF" };
       nodeCount = nodeCount + 1;
       //update the local global variables: nodes, activeNode, root
       nodes = newNodes;

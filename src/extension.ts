@@ -279,6 +279,9 @@ export async function activate(context: vscode.ExtensionContext) {
 						case 'updateNodeText':
 							provider.receiveInformation("updateNodeText", {nodeId: message.nodeId, nodeText: message.nodeText });
 							break;
+						case 'updateNodeBackground':
+							provider.receiveInformation("updateNodeBackground", {nodeId: message.nodeId, bgColor: message.bgColor});
+							break;
                     }
                 },
                 undefined,

@@ -165,6 +165,10 @@ function GraphApp() {
     setNodes(prev => prev.map(n => n.id === id ? { ...n, text } : n));
     vscode.postMessage({ command: 'updateNodeText', nodeId: id, nodeText: text });
   }}
+  onNodeColorChange={(id, color) => {
+    setNodes(prev => prev.map(n => (n.id === id ? { ...n, color } : n)));
+    vscode.postMessage({ command: 'updateNodeBackground', nodeId: id, bgColor: color });
+  }}
 />
   );
 }
