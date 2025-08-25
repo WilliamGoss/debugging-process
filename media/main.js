@@ -42,11 +42,6 @@
           <br/>
       </div>
       <div id="view2" class="hidden">
-      <br/>
-      <button id="showTreeButton">Show Graph</button>
-      <br/>
-          <br/>
-          <hr/>
           <br/>
           <div class="diff">
           </div>
@@ -73,9 +68,6 @@
 
   // @ts-ignore: Object is possibly 'null'.
   document.getElementById('startIssue').addEventListener('click', () => { showView('view2'); createNewIssue(); });
-  /* Overall View */
-  // @ts-ignore: Object is possibly 'null'.
-  document.getElementById('showTreeButton').addEventListener('click', () => showTree(nodes));
 
   /* TESTING ONLY */
   //document.getElementById('clearState')?.addEventListener('click', () => emptyState());
@@ -319,6 +311,12 @@
                 const newText = message.data.nodeText;
                 nodes[nodeToUpdate].text = newText;
                 vscode.setState({ root: root, nodeCount: nodeCount, activeNode: activeNode, nodes: nodes });
+                break;
+              }
+            case 'openGraph':
+              {
+                const nodeArray = Object.values(nodes);
+                vscode.postMessage({ type: 'showGraph', command: "showD3Graph", treeData: nodeArray, activeNode: activeNode });
                 break;
               }
       }

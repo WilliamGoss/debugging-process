@@ -72,8 +72,10 @@
         "icon": "$(debug-breakpoint-data)"
       },
       {
-        "command": "extension.runPythonFile",
-        "title": "Run Python File"
+        "command": "extension.showViz",
+        "title": "Open Tool",
+        "category": "Visualization",
+        "icon": "$(graph)"
       },
       {
         "command": "extension.setOpenAIKey",
@@ -83,7 +85,16 @@
         "command": "extension.clearOpenAIKey",
         "title": "Debug: Clear OpenAI API Key"
       }
-    ]
+    ],
+    "menus": {
+      "editor/title": [
+        {
+          "command": "extension.showViz",
+          "when": "editorTextFocus",
+          "group": "navigation@1"
+        }
+      ]
+    }
   },
   "scripts": {
     "vscode:prepublish": "npm run package",

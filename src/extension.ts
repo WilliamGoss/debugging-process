@@ -188,19 +188,6 @@ export async function activate(context: vscode.ExtensionContext) {
 		}
     }, 1000); // Check every second
 
-	/*
-	// Detect Python execution
-    function detectPythonExecution(terminal: vscode.Terminal) {
-        if (terminal.name.includes("Python") || terminal.name.includes("Run Python")) {
-            if (fileChanged) {
-				console.log('create new node');
-				provider.receiveInformation("autoCreateNode", 'Changes made to files');
-				fileChanged = false;
-			}
-        }
-    }
-		*/
-
 
     // Register the 'showD3Graph' command
     context.subscriptions.push(
@@ -428,6 +415,12 @@ export async function activate(context: vscode.ExtensionContext) {
 		vscode.commands.registerCommand('extension.clearOpenAIKey', async () => {
 		await context.secrets.delete('openai.apiKey');
 		vscode.window.showInformationMessage('OpenAI API key removed.');
+		})
+	);
+
+	context.subscriptions.push(
+		vscode.commands.registerCommand('extension.showViz', () => {
+			provider.receiveInformation('openGraph', {});
 		})
 	);
 }
