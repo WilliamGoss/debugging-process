@@ -1,5 +1,5 @@
 import React, { useRef, useState, useEffect, useLayoutEffect } from "react";
-import { Card, CardContent, Typography, TextField, Collapse, Box } from "@mui/material";
+import { Card, CardContent, Typography, TextField, Collapse, Box, Fab, SvgIcon } from "@mui/material";
 
 /*
  * Infinite canvas with pan/zoom + draggable nodes.
@@ -99,6 +99,40 @@ export default function NodeCanvas({
       };
       animRef.current = requestAnimationFrame(step);
     });
+  }
+
+  function centerOnNode(id: number) {
+    const container = containerRef.current;
+    if (!container) return;
+  
+    // find node & measure its current size (fallback to constants)
+    const node = nodes.find(n => Number(n.id) === Number(id));
+    if (!node) return;
+  
+    const el = container.querySelector(`.canvas-node[data-node-id="${id}"]`) as HTMLElement | null;
+    const CARD_W = el?.offsetWidth ?? 250;
+    const CARD_H = el?.offsetHeight ?? 100;
+  
+    const wx = node.x + CARD_W / 2;
+    const wy = node.y + CARD_H / 2;
+  
+    const s = latestTransformRef.current.scale; // keep the current zoom
+    const { clientWidth, clientHeight } = container;
+  
+    const target = {
+      scale: s,
+      tx: clientWidth / 2 - wx * s,
+      ty: clientHeight / 2 - wy * s,
+    };
+  
+    animateToTransform(target, 350);
+    centeredOnRef.current = id; // avoid a redundant fly-in from the effect
+  }
+  
+  function centerOnActiveNode() {
+    const id = Number(activeNodeId);
+    if (Number.isFinite(id)) centerOnNode(id);
+    else resetView(); // fallback if nothing is active
   }
 
   // --- Initial center + fly-to-active ---------------------------------------
@@ -234,7 +268,7 @@ export default function NodeCanvas({
       <div style={{ position: "absolute", top: 10, left: 10, zIndex: 1000, display: "flex", gap: 4 }}>
         <button onClick={() => zoomRelative(1.1)} aria-label="Zoom in">+</button>
         <button onClick={() => zoomRelative(1 / 1.1)} aria-label="Zoom out">-</button>
-        <button onClick={resetView} aria-label="Reset view">×</button>
+        <button onClick={centerOnActiveNode} aria-label="Reset view">×</button>
       </div>
 
       <div
@@ -271,7 +305,6 @@ export default function NodeCanvas({
 }
 
 // ---------------------------------------------------------------------------
-
 function DraggableNode({
   node,
   onUpdatePosition,
@@ -305,24 +338,19 @@ function DraggableNode({
 }) {
   const hasError = !!(node.runError && String(node.runError).trim().length);
 
-  // --- Drag & long-press state (card-scoped) ---
+  // Refs
   const cardRef = useRef<HTMLDivElement | null>(null);
   const textWrapRef = useRef<HTMLDivElement | null>(null);
   const colorAnchorRef = useRef<HTMLDivElement | null>(null);
 
+  // Drag state only (no long-press)
   const dragRef = useRef<{ startX: number; startY: number; origX: number; origY: number } | null>(null);
   const isDraggingRef = useRef(false);
-  const pointerDownRef = useRef(false);
 
-  const longPressTimerRef = useRef<number | null>(null);
-  const longPressEligibleRef = useRef(false);
-
-  // NEW: track whether the pointer down started on an area that should open overlay on tap
+  // Which area tap should open an overlay (if any)
   const tapKindRef = useRef<null | "output" | "error">(null);
 
-  const PRESS_MS = 450;
   const MOVE_CANCEL_PX = 4;
-
   const HIDE_OUTPUT_FOR_ID = 0;
 
   useEffect(() => {
@@ -342,155 +370,6 @@ function DraggableNode({
 
   const outputRows = Math.min(5, countLines(node.runOutput));
   const errorRows = Math.min(5, countLines(node.runError));
-
-  const cancelLongPress = () => {
-    if (longPressTimerRef.current !== null) { clearTimeout(longPressTimerRef.current); longPressTimerRef.current = null; }
-  };
-
-  // ---- Card pointer handlers: handle drag + long-press here ----
-  const handlePointerDown = (e: React.PointerEvent<HTMLDivElement>) => {
-    if (e.button !== 0) return;
-
-    const targetEl = e.target as Element | null;
-
-    // Drag surfaces we allow grabbing from
-    const inDragSurface = !!targetEl?.closest('[data-drag-surface="true"]');
-
-    // Areas that should open overlay on a tap (no drag)
-    const inOutputTap = !!targetEl?.closest('[data-open-on-tap="output"]');
-    const inErrorTap  = !!targetEl?.closest('[data-open-on-tap="error"]');
-    tapKindRef.current = inOutputTap ? "output" : inErrorTap ? "error" : null;
-
-    // Interactive elements (allow clicks/focus); drag surfaces override.
-    const interactiveSelector =
-      'select, button, a[href], [role="button"], [role="textbox"], [contenteditable="true"], .MuiButtonBase-root, [data-interactive="true"]';
-
-    const clickedInteractive =
-      (!inDragSurface && !!targetEl?.closest(interactiveSelector)) ||
-      (colorAnchorRef.current && targetEl && colorAnchorRef.current.contains(targetEl));
-
-    if (clickedInteractive) {
-      longPressEligibleRef.current = false;
-      cancelLongPress();
-      return; // let the control handle the click
-    }
-
-    // Start potential drag/long-press. Do NOT preventDefault here—keeps click intact.
-    longPressEligibleRef.current =
-      !!(textWrapRef.current && targetEl && textWrapRef.current.contains(targetEl));
-
-    dragRef.current = { startX: e.clientX, startY: e.clientY, origX: node.x, origY: node.y };
-    isDraggingRef.current = false;
-    pointerDownRef.current = true;
-
-    try { (e.currentTarget as HTMLDivElement).setPointerCapture(e.pointerId); } catch {}
-
-    cancelLongPress();
-    if (longPressEligibleRef.current) {
-      longPressTimerRef.current = window.setTimeout(() => {
-        if (!pointerDownRef.current || isDraggingRef.current || !longPressEligibleRef.current) return;
-        dragRef.current = null;
-        try { cardRef.current?.releasePointerCapture(e.pointerId); } catch {}
-        setIsEditing(true);
-      }, PRESS_MS);
-    }
-  };
-
-  const handlePointerMove = (e: React.PointerEvent<HTMLDivElement>) => {
-    if (!dragRef.current) return;
-    e.preventDefault(); // stop native selection while dragging across textareas
-    const dx = (e.clientX - dragRef.current.startX) / scale;
-    const dy = (e.clientY - dragRef.current.startY) / scale;
-
-    if (!isDraggingRef.current && (Math.abs(dx) > MOVE_CANCEL_PX || Math.abs(dy) > MOVE_CANCEL_PX)) {
-      isDraggingRef.current = true;
-      cancelLongPress();
-    }
-
-    const newX = dragRef.current.origX + dx;
-    const newY = dragRef.current.origY + dy;
-    onUpdatePosition(node.id, newX, newY);
-  };
-
-  const handlePointerUp = (e: React.PointerEvent<HTMLDivElement>) => {
-    cancelLongPress();
-    pointerDownRef.current = false;
-
-    // If we never started a dragRef (e.g. long-press switched to edit), just release and maybe open overlay.
-    if (!dragRef.current) {
-      try { (e.currentTarget as HTMLDivElement).releasePointerCapture(e.pointerId); } catch {}
-    } else {
-      const dx = (e.clientX - dragRef.current.startX) / scale;
-      const dy = (e.clientY - dragRef.current.startY) / scale;
-      const finalX = dragRef.current.origX + dx;
-      const finalY = dragRef.current.origY + dy;
-
-      onUpdatePosition(node.id, finalX, finalY);
-      onDragEnd?.(node.id, finalX, finalY);
-
-      dragRef.current = null;
-      try { (e.currentTarget as HTMLDivElement).releasePointerCapture(e.pointerId); } catch {}
-    }
-
-    // If it was a TAP (no drag), open the proper overlay now.
-    const wasTap = !isDraggingRef.current;
-    const tapKind = tapKindRef.current;
-    tapKindRef.current = null;
-
-    if (wasTap && tapKind) {
-      if (tapKind === "output") onToggleOutput(true);
-      else if (tapKind === "error") onToggleError(true);
-    }
-  };
-
-  const handlePointerCancel = (e: React.PointerEvent<HTMLDivElement>) => {
-    cancelLongPress();
-    pointerDownRef.current = false;
-    dragRef.current = null;
-    tapKindRef.current = null;
-    try { (e.currentTarget as HTMLDivElement).releasePointerCapture(e.pointerId); } catch {}
-  };
-
-  // -----------------------------------------------------------------------
-  // Color palette + state
-  const COLOR_PALETTE = React.useMemo(
-    () => [
-      "#FFFFFF",
-      "#F6C3C1",
-      "#FFD79B",
-      "#FFEE9D",
-      "#D8E9A8",
-      "#AEDBF5",
-      "#B3DAF5",
-      "#D7C4E5",
-    ],
-    []
-  );
-  const DEFAULT_COLOR = COLOR_PALETTE[0];
-  const cardBg = isActive ? "#E3F2FD" : (node.color ?? DEFAULT_COLOR);
-  const currentColor: string = node.color ?? DEFAULT_COLOR;
-  const [colorMenuOpen, setColorMenuOpen] = useState(false);
-
-  // Close colour menu on outside click
-  useEffect(() => {
-    if (!colorMenuOpen) return;
-    const handleClose = (e: PointerEvent) => {
-      if (!colorAnchorRef.current) { setColorMenuOpen(false); return; }
-      const target = e.target as globalThis.Node | null;
-      if (target && !colorAnchorRef.current.contains(target)) setColorMenuOpen(false);
-    };
-    window.addEventListener("pointerdown", handleClose, true);
-    return () => window.removeEventListener("pointerdown", handleClose, true);
-  }, [colorMenuOpen]);
-
-  const handleSelectColor = (c: string) => {
-    if (c === node.color || (c === DEFAULT_COLOR && !node.color)) { setColorMenuOpen(false); return; }
-    onChangeColor?.(node.id, c);
-    setColorMenuOpen(false);
-  };
-
-  const hasOutput = !!(node.runOutput && String(node.runOutput).trim().length);
-  const hideOutput = node.id === HIDE_OUTPUT_FOR_ID;
 
   // ---------- Inline editing ----------
   const [isEditing, setIsEditing] = useState(false);
@@ -518,18 +397,113 @@ function DraggableNode({
     if (save && next !== node.text) onChangeText(node.id, next);
   };
 
+  // ---- Card pointer handlers: drag + open overlays on simple taps ----
+  const handlePointerDown = (e: React.PointerEvent<HTMLDivElement>) => {
+    if (e.button !== 0) return;
+
+    const targetEl = e.target as Element | null;
+
+    const inOutputTap = !!targetEl?.closest('[data-open-on-tap="output"]');
+    const inErrorTap  = !!targetEl?.closest('[data-open-on-tap="error"]');
+    tapKindRef.current = inOutputTap ? "output" : inErrorTap ? "error" : null;
+
+    const interactiveSelector =
+      'select, button, a[href], [role="button"], [role="textbox"], [contenteditable="true"], .MuiButtonBase-root, [data-interactive="true"]';
+    const inDragSurface = !!targetEl?.closest('[data-drag-surface="true"]');
+
+    const clickedInteractive =
+      (!inDragSurface && !!targetEl?.closest(interactiveSelector)) ||
+      (colorAnchorRef.current && targetEl && colorAnchorRef.current.contains(targetEl));
+
+    if (clickedInteractive) return;
+
+    dragRef.current = { startX: e.clientX, startY: e.clientY, origX: node.x, origY: node.y };
+    isDraggingRef.current = false;
+    try { (e.currentTarget as HTMLDivElement).setPointerCapture(e.pointerId); } catch {}
+  };
+
+  const handlePointerMove = (e: React.PointerEvent<HTMLDivElement>) => {
+    if (!dragRef.current) return;
+    e.preventDefault(); // stop native selection while dragging
+    const dx = (e.clientX - dragRef.current.startX) / scale;
+    const dy = (e.clientY - dragRef.current.startY) / scale;
+
+    if (!isDraggingRef.current && (Math.abs(dx) > MOVE_CANCEL_PX || Math.abs(dy) > MOVE_CANCEL_PX)) {
+      isDraggingRef.current = true;
+    }
+
+    onUpdatePosition(node.id, dragRef.current.origX + dx, dragRef.current.origY + dy);
+  };
+
+  const handlePointerUp = (e: React.PointerEvent<HTMLDivElement>) => {
+    if (dragRef.current) {
+      const dx = (e.clientX - dragRef.current.startX) / scale;
+      const dy = (e.clientY - dragRef.current.startY) / scale;
+      const finalX = dragRef.current.origX + dx;
+      const finalY = dragRef.current.origY + dy;
+      onUpdatePosition(node.id, finalX, finalY);
+      onDragEnd?.(node.id, finalX, finalY);
+      dragRef.current = null;
+      try { (e.currentTarget as HTMLDivElement).releasePointerCapture(e.pointerId); } catch {}
+    }
+
+    const wasTap = !isDraggingRef.current;
+    const tapKind = tapKindRef.current;
+    tapKindRef.current = null;
+    if (wasTap && tapKind) {
+      if (tapKind === "output") onToggleOutput(true);
+      else if (tapKind === "error") onToggleError(true);
+    }
+  };
+
+  const handlePointerCancel = (e: React.PointerEvent<HTMLDivElement>) => {
+    dragRef.current = null;
+    tapKindRef.current = null;
+    try { (e.currentTarget as HTMLDivElement).releasePointerCapture(e.pointerId); } catch {}
+  };
+
+  // -----------------------------------------------------------------------
+  // Color palette + state
+  const COLOR_PALETTE = React.useMemo(
+    () => ["#FFFFFF","#F6C3C1","#FFD79B","#FFEE9D","#D8E9A8","#AEDBF5","#B3DAF5","#D7C4E5"],
+    []
+  );
+  const DEFAULT_COLOR = COLOR_PALETTE[0];
+  const currentColor: string = node.color ?? DEFAULT_COLOR;
+  const cardBg = currentColor;
+  const [colorMenuOpen, setColorMenuOpen] = useState(false);
+
+  useEffect(() => {
+    if (!colorMenuOpen) return;
+    const handleClose = (e: PointerEvent) => {
+      if (!colorAnchorRef.current) { setColorMenuOpen(false); return; }
+      const target = e.target as globalThis.Node | null;
+      if (target && !colorAnchorRef.current.contains(target)) setColorMenuOpen(false);
+    };
+    window.addEventListener("pointerdown", handleClose, true);
+    return () => window.removeEventListener("pointerdown", handleClose, true);
+  }, [colorMenuOpen]);
+
+  const handleSelectColor = (c: string) => {
+    if (c === node.color || (c === DEFAULT_COLOR && !node.color)) { setColorMenuOpen(false); return; }
+    onChangeColor?.(node.id, c);
+    setColorMenuOpen(false);
+  };
+
+  const hasOutput = !!(node.runOutput && String(node.runOutput).trim().length);
+  const hideOutput = node.id === HIDE_OUTPUT_FOR_ID;
+
   return (
     <Card
       ref={cardRef}
       className="canvas-node"
       data-node-id={node.id}
       onDoubleClick={(e) => { e.stopPropagation(); onSelect?.(); }}
-      // Use bubble-phase so clicks on children still work naturally.
       onPointerDown={handlePointerDown}
       onPointerMove={handlePointerMove}
       onPointerUp={handlePointerUp}
       onPointerCancel={handlePointerCancel}
-      sx={{
+      sx={(theme) => ({
         width: 250,
         p: 1,
         pt: 0.5,
@@ -539,23 +513,37 @@ function DraggableNode({
         top: node.y,
         cursor: dragRef.current ? "grabbing" : "grab",
         userSelect: "none",
-        bgcolor: cardBg,
+        bgcolor: cardBg,                     // node’s color
         border: "2px solid",
-        borderColor: isActive ? "#90CAF9" : "divider",
+        borderColor: "divider",              // neutral inner border
+        // ring around edges when active:
         boxShadow: isActive
-          ? "-12px 6px 18px rgba(32,33,36,.16), 12px 6px 18px rgba(32,33,36,.16), 0 12px 22px rgba(32,33,36,.18)"
+          ? `0 0 0 3px ${theme.palette.primary.main}, 0 3px 10px rgba(32,33,36,.12)`
           : "0 3px 10px rgba(32,33,36,.12)",
-        filter: "none",
-        zIndex: 1,
+        zIndex: isActive ? 2 : 1,
         transition: "background-color 120ms ease, border-color 120ms ease, box-shadow 120ms ease",
         overflow: "visible",
         isolation: "isolate",
-      }}
+        "&:hover .editFab, &:focus-within .editFab": {
+          opacity: 1,
+          pointerEvents: "auto",
+          transform: "translateY(0)",
+        },
+      })}
     >
       {/* top-right node chevron */}
       <div
         data-interactive="true"
-        style={{ position: "absolute", top: 4, right: 4, display: "flex", alignItems: "center", gap: 4 }}
+        style={{
+          position: "absolute",
+          top: 4,
+          right: 4,
+          display: "flex",
+          alignItems: "center",
+          gap: 4,
+          zIndex: 5, // ensure always clickable
+          pointerEvents: "auto",
+        }}
         onPointerDown={(e) => e.stopPropagation()}
         onClick={(e) => { e.stopPropagation(); onToggleExpand(!expanded); }}
         role="button"
@@ -574,120 +562,150 @@ function DraggableNode({
         </svg>
       </div>
 
-      <CardContent sx={{ p: 1, pt: 0.75, "&:last-child": { pb: 1 } }}>
-        {!isEditing ? (
-          <div ref={textWrapRef} style={{ cursor: "text" }}>
-            <Typography variant="body1" sx={{ pr: 2, whiteSpace: "pre-wrap", wordBreak: "break-word" }}>
-              {node.text}
-            </Typography>
-          </div>
-        ) : (
-          <TextField
-            autoFocus
-            inputRef={editRef}
-            fullWidth
-            multiline
-            minRows={1}
-            value={draft}
-            onChange={(e) => setDraft(e.target.value)}
-            onPointerDown={(e) => e.stopPropagation()}
-            onPointerMove={(e) => e.stopPropagation()}
-            onPointerUp={(e) => e.stopPropagation()}
-            onBlur={() => commit(true)}
-            onKeyDown={(e) => {
-              if (e.key === "Enter" && !e.shiftKey) { e.preventDefault(); commit(true); }
-              else if (e.key === "Escape") { e.preventDefault(); commit(false); }
-            }}
-            inputProps={{ spellCheck: false }}
-            sx={{ "& .MuiInputBase-input": { fontSize: "1rem", lineHeight: 1.4 } }}
-          />
-        )}
+      <CardContent sx={{ p: 1, pt: 0.75, pb: 0.25, "&:last-child": { pb: 0.25 } }}>
+        {/* TEXT AREA WRAPPER: anchor the pencil here */}
+        <Box sx={{ position: "relative" }}>
+          {!isEditing ? (
+            <div ref={textWrapRef}>
+              <Typography
+                variant="body1"
+                sx={{
+                  pr: 7,            // room for the circular button on the right
+                  pb: 3,            // reserve vertical room so the Fab doesn't overlap text
+                  whiteSpace: "pre-wrap",
+                  wordBreak: "break-word",
+                }}
+              >
+                {node.text}
+              </Typography>
+            </div>
+          ) : (
+            <TextField
+              autoFocus
+              inputRef={editRef}
+              fullWidth
+              multiline
+              minRows={1}
+              value={draft}
+              onChange={(e) => setDraft(e.target.value)}
+              onPointerDown={(e) => e.stopPropagation()}
+              onPointerMove={(e) => e.stopPropagation()}
+              onPointerUp={(e) => e.stopPropagation()}
+              onBlur={() => commit(true)}
+              onKeyDown={(e) => {
+                if (e.key === "Enter" && !e.shiftKey) { e.preventDefault(); commit(true); }
+                else if (e.key === "Escape") { e.preventDefault(); commit(false); }
+              }}
+              inputProps={{ spellCheck: false }}
+              sx={{ "& .MuiInputBase-input": { fontSize: "1rem", lineHeight: 1.4 } }}
+            />
+          )}
 
+          {/* EDIT FAB pinned to the bottom-right of THIS text area */}
+          {!isEditing && (
+            <Fab
+              className="editFab"
+              data-interactive="true"
+              size="small"
+              color="primary"
+              aria-label="Edit text"
+              onPointerDown={(e) => e.stopPropagation()}
+              onClick={(e) => { e.stopPropagation(); setIsEditing(true); }}
+              sx={{
+                position: "absolute",
+                right: 8,          // bottom-right of the text wrapper
+                bottom: 8,
+                width: 32,
+                height: 32,
+                minHeight: 32,
+                boxShadow: 6,
+                opacity: 0,        // revealed on hover (Card &:hover rule)
+                pointerEvents: "none",
+                transform: "translateY(2px)",
+                transition: "opacity 140ms ease, transform 140ms ease",
+                zIndex: 2,
+              }}
+            >
+              <SvgIcon fontSize="small" sx={{ color: "common.white" }}>
+                <path d="M3 17.25V21h3.75L17.81 9.94l-3.75-3.75L3 17.25z" />
+                <path d="M20.71 7.04a1 1 0 0 0 0-1.41l-2.34-2.34a1 1 0 0 0-1.41 0l-1.84 1.83 3.75 3.75 1.84-1.83z" />
+              </SvgIcon>
+            </Fab>
+          )}
+        </Box>
+
+        {/* Expanded content below; pencil stays anchored to the text area above */}
         <Collapse in={expanded} unmountOnExit sx={{ mt: 1 }}>
           <Box>
-            {/* Output section */}
-{!hideOutput && (
-  hasOutput ? (
-    <Box sx={{ position: "relative" }}>
-      <div
-        data-drag-surface="true"
-        data-open-on-tap="output"
-        style={{ userSelect: "none" }}
-      >
-        <TextField
-          label="Output"
-          value={node.runOutput ?? ""}
-          fullWidth
-          multiline
-          minRows={outputRows}
-          maxRows={outputRows}
-          margin="dense"
-          spellCheck={false}
-          inputProps={{ wrap: "off" }}
-          sx={{
-            "& .MuiInputBase-input": {
-              fontFamily: "ui-monospace, SFMono-Regular, Menlo, monospace",
-              fontSize: "0.85rem",
-              lineHeight: 1.35,
-              cursor: "inherit",
-            },
-            "& .MuiInputBase-inputMultiline": {
-              whiteSpace: "pre",
-              overflow: "hidden",
-              maxHeight: 220,
-              resize: "none",
-              cursor: "inherit",
-            },
-            "& textarea": { overflowX: "auto", resize: "none" },
-          }}
-          InputProps={{ readOnly: true }}
-        />
-      </div>
+            {!hideOutput && (hasOutput ? (
+              <Box sx={{ position: "relative" }}>
+                <div data-drag-surface="true" data-open-on-tap="output" style={{ userSelect: "none" }}>
+                  <TextField
+                    label="Output"
+                    value={node.runOutput ?? ""}
+                    fullWidth
+                    multiline
+                    minRows={outputRows}
+                    maxRows={outputRows}
+                    margin="dense"
+                    spellCheck={false}
+                    inputProps={{ wrap: "off" }}
+                    sx={{
+                      "& .MuiInputBase-input": {
+                        fontFamily: "ui-monospace, SFMono-Regular, Menlo, monospace",
+                        fontSize: "0.85rem",
+                        lineHeight: 1.35,
+                        cursor: "inherit",
+                      },
+                      "& .MuiInputBase-inputMultiline": {
+                        whiteSpace: "pre",
+                        overflow: "hidden",
+                        maxHeight: 220,
+                        resize: "none",
+                        cursor: "inherit",
+                      },
+                      "& textarea": { overflowX: "auto", resize: "none" },
+                    }}
+                    InputProps={{ readOnly: true }}
+                  />
+                </div>
 
-      {outputExpanded && (
-        <Box
-          onClick={() => onToggleOutput(false)}
-          sx={{
-            position: "absolute",
-            zIndex: 20,
-            top: -8,
-            left: -8,
-            display: "inline-block",
-            width: "max-content",
-            height: "max-content",
-            maxWidth: "90vw",
-            maxHeight: "80vh",
-            overflow: "auto",
-            bgcolor: "background.paper",
-            border: "1px solid",
-            borderColor: "divider",
-            borderRadius: 1,
-            boxShadow: 6,
-            p: 1,
-          }}
-        >
-          <pre style={{
-            margin: 0, padding: 8, fontFamily: "ui-monospace, SFMono-Regular, Menlo, monospace",
-            fontSize: "0.85rem", lineHeight: 1.35, whiteSpace: "pre", display: "block",
-          }}>
-            {node.runOutput ?? ""}
-          </pre>
-        </Box>
-      )}
-    </Box>
-  ) : (
-    // If you also want to hide the "No output detected" placeholder when there's no output:
-    null
-    // Or keep the placeholder for other nodes by using the original disabled TextField here.
-  )
-)}
+                {outputExpanded && (
+                  <Box
+                    onClick={() => onToggleOutput(false)}
+                    sx={{
+                      position: "absolute",
+                      zIndex: 20,
+                      top: -8,
+                      left: -8,
+                      display: "inline-block",
+                      width: "max-content",
+                      height: "max-content",
+                      maxWidth: "90vw",
+                      maxHeight: "80vh",
+                      overflow: "auto",
+                      bgcolor: "background.paper",
+                      border: "1px solid",
+                      borderColor: "divider",
+                      borderRadius: 1,
+                      boxShadow: 6,
+                      p: 1,
+                    }}
+                  >
+                    <pre style={{
+                      margin: 0, padding: 8, fontFamily: "ui-monospace, SFMono-Regular, Menlo, monospace",
+                      fontSize: "0.85rem", lineHeight: 1.35, whiteSpace: "pre", display: "block",
+                    }}>
+                      {node.runOutput ?? ""}
+                    </pre>
+                  </Box>
+                )}
+              </Box>
+            ) : null)}
+
             {hasError && (
               <Box sx={{ position: "relative" }}>
-                <div
-                  data-drag-surface="true"
-                  data-open-on-tap="error"
-                  style={{ userSelect: "none" }}
-                >
+                <div data-drag-surface="true" data-open-on-tap="error" style={{ userSelect: "none" }}>
                   <TextField
                     label="Error"
                     value={node.runError ?? ""}
@@ -698,7 +716,6 @@ function DraggableNode({
                     margin="dense"
                     spellCheck={false}
                     inputProps={{ wrap: "off" }}
-                    // No onClick — handled via tap detection in handlePointerUp
                     sx={{
                       "& .MuiInputBase-input": {
                         fontFamily: "ui-monospace, SFMono-Regular, Menlo, monospace",
@@ -741,17 +758,10 @@ function DraggableNode({
                       p: 1,
                     }}
                   >
-                    <pre
-                      style={{
-                        margin: 0,
-                        padding: 8,
-                        fontFamily: "ui-monospace, SFMono-Regular, Menlo, monospace",
-                        fontSize: "0.85rem",
-                        lineHeight: 1.35,
-                        whiteSpace: "pre",
-                        display: "block",
-                      }}
-                    >
+                    <pre style={{
+                      margin: 0, padding: 8, fontFamily: "ui-monospace, SFMono-Regular, Menlo, monospace",
+                      fontSize: "0.85rem", lineHeight: 1.35, whiteSpace: "pre", display: "block",
+                    }}>
                       {node.runError ?? ""}
                     </pre>
                   </Box>
@@ -766,17 +776,18 @@ function DraggableNode({
                 data-interactive="true"
                 style={{ position: "relative", display: "inline-block" }}
               >
+                {/* Trigger circle with theme-aware darker border and correct backgroundColor prop */}
                 <Box
                   onClick={(e) => { e.stopPropagation(); setColorMenuOpen(!colorMenuOpen); }}
-                  sx={{
+                  sx={(theme) => ({
                     width: 24,
                     height: 24,
                     borderRadius: "50%",
-                    bgcolor: currentColor,
-                    border: "1px solid",
-                    borderColor: "divider",
+                    backgroundColor: currentColor, // use backgroundColor for raw hex
+                    border: "2px solid",
+                    borderColor: theme.palette.mode === "dark" ? theme.palette.grey[400] : theme.palette.grey[700],
                     cursor: "pointer",
-                  }}
+                  })}
                 />
                 {colorMenuOpen && (
                   <Box
@@ -791,30 +802,38 @@ function DraggableNode({
                       borderRadius: 1,
                       boxShadow: 6,
                       p: 1,
-                      width: 200,
+                      width: "max-content",      // ⬅️ let content decide width
+                      maxWidth: "90vw",
                     }}
                     onPointerDown={(e) => e.stopPropagation()}
                   >
                     <Typography variant="caption" sx={{ fontWeight: 500, mb: 0.5 }}>
                       Colors
                     </Typography>
-                    <Box sx={{ display: "grid", gridTemplateColumns: "repeat(8, 1fr)", gap: 0.5, mb: 1 }}>
+                    <Box sx={{ display: "grid", gridTemplateColumns: `repeat(${COLOR_PALETTE.length}, 20px)`, gap: 0.5, mb: 1 }}>
                       {COLOR_PALETTE.map((c) => (
                         <Box
                           key={c}
                           onClick={(e) => { e.stopPropagation(); handleSelectColor(c); }}
-                          sx={{
+                          sx={(theme) => ({
                             width: 20,
                             height: 20,
                             borderRadius: "50%",
-                            bgcolor: c,
-                            border: c === currentColor ? "2px solid" : "1px solid",
-                            borderColor: c === currentColor ? "primary.main" : "divider",
+                            backgroundColor: c, // use backgroundColor for raw hex
+                            border: "2px solid",
+                            borderColor: c === currentColor
+                              ? theme.palette.primary.main
+                              : (theme.palette.mode === "dark" ? theme.palette.grey[400] : theme.palette.grey[700]),
                             display: "flex",
                             alignItems: "center",
                             justifyContent: "center",
                             cursor: "pointer",
-                          }}
+                            "&:hover": {
+                              borderColor: c === currentColor
+                                ? theme.palette.primary.dark
+                                : (theme.palette.mode === "dark" ? theme.palette.grey[300] : theme.palette.grey[800]),
+                            },
+                          })}
                         >
                           {c === currentColor && (
                             <svg width="10" height="10" viewBox="0 0 16 16">
