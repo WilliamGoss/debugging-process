@@ -42,26 +42,39 @@
           <br/>
       </div>
       <div id="view2" class="hidden">
-          <br/>
-          <div class="diff">
-          </div>
-          <br/>
-          <br/>
-          <div class="hidden">
-              <button id="fileChanged"></button><p> File Changed</p>
-              <br/>
-              <button id="pyRun"></button>
-              <p>    </p> <p> Python Ran</p>
-              <br/>
-              <p> Nodes in state: </p><p id="htmlCount">0</p>
-              <br/>
-              <p> Initial Node: </p> <p id="firstNode">None</p>
-              <br/>
-              <br/>
-              <button id="clearStatus">Clear Status</button>
+        <br/>
+          <div class="end_bug">
+            <button id="closeIssue">Finished</button>
           </div>
       </div>
   `;
+
+  // --- 64×64 logo (append after document.body.innerHTML) ---
+  (function mountLogo() {
+    const url = (window.__ASSETS__ && window.__ASSETS__.logo) || '';
+    if (!url) return;
+
+    const target = document.getElementById('view2') || document.body; // choose your target
+
+    const logoDiv = document.createElement('div');
+    logoDiv.id = 'logo64';
+    logoDiv.style.width = '128px';
+    logoDiv.style.height = '128px';
+    logoDiv.style.backgroundImage = `url("${url}")`;
+    logoDiv.style.backgroundSize = 'contain';
+    logoDiv.style.backgroundRepeat = 'no-repeat';
+    logoDiv.style.backgroundPosition = 'center';
+
+    // position it inside the view (adjust as you like)
+    logoDiv.style.position = 'fixed';
+    logoDiv.style.left = '50%';
+    logoDiv.style.top  = '50%';
+    logoDiv.style.transform = 'translate(-50%, -50%)';
+    logoDiv.style.zIndex = '10';
+
+    target.appendChild(logoDiv);
+  })();
+
 
   // Call the function to update textarea with the node's name
   updateExplorationText();
@@ -166,7 +179,7 @@
                   // reasonably similar gaps.
                   const APPROX_CHARS_PER_LINE = 26;
                   const TEXT_ROW_HEIGHT = 24;
-                  const BASE_SPACING = 80;
+                  const BASE_SPACING = 50;
                   let textHeight = 0;
                   if (parentNode && typeof parentNode.text === 'string') {
                       const textLines = String(parentNode.text).split(/\r\n|\n|\r/);
@@ -184,7 +197,7 @@
                   let cardHeight = textHeight;
                   // If the card is expanded, add height for runtime output and error panels
                   const ROW_HEIGHT = 20;
-                  const FIELD_BASE = 30;
+                  const FIELD_BASE = 50;
                   if (parentNode && parentNode.expanded) {
                       let extraHeight = 0;
                       const hasOutput = parentNode.runOutput && String(parentNode.runOutput).trim().length > 0;
@@ -204,7 +217,7 @@
                       cardHeight += extraHeight;
                   }
                   // Add a small margin so that cards don't touch
-                  const MARGIN = 10;
+                  const MARGIN = 60;
                   const newYValue = parentNode ? parentNode.y + cardHeight + MARGIN : 0;
                   // Align the new node horizontally with its parent
                   const newXValue = parentNode ? parentNode.x : 0;
@@ -293,6 +306,8 @@
                   nodes[nodeToUpdate].text = summarizationOfChanges;
                   nodes[nodeToUpdate].diffs = hunks;
                   vscode.setState({ root: root, nodeCount: nodeCount, activeNode: activeNode, nodes: nodes });
+                  let nodeArray = Object.values(nodes);
+                  vscode.postMessage({ type: 'updateGraph', command: "showD3Graph", treeData: nodeArray, activeNode: activeNode });
                   //Also update the side bar
                   updateExplorationText();
                   break;
@@ -379,10 +394,6 @@
 
       const textarea = document.querySelector('#view2 textarea[name="exploration"]');
       if (textarea) { textarea.value = node.text || ''; }
-
-      const diffContainer = document.querySelector('#view2 .diff');
-      // If you also have clampHunk, you can do: const hunks = (node.hunks||[]).map(h => clampHunk(h, 100));
-      renderDiff(node.diffs || [], diffContainer);
   }
 
   //diff object into hunks
@@ -536,61 +547,6 @@
         ]
       };
     }
-
-// --- rendering helpers ---
-function renderHunk(h) {
-  const header = document.createElement('div');
-  header.className = 'hunk-header';
-  header.textContent = `@@ -${h.oldStart} +${h.newStart} @@`;
-
-  const body = document.createElement('div');
-  body.className = 'code';
-
-  (h.lines || []).forEach(line => {
-    const row = document.createElement('div');
-    row.className = `row ${line.kind}`;
-
-    const oldCell = document.createElement('div');
-    oldCell.className = 'ln';
-    oldCell.textContent = line.oldNo ?? '';
-
-    const newCell = document.createElement('div');
-    newCell.className = 'ln';
-    newCell.textContent = line.newNo ?? '';
-
-    const text = document.createElement('div');
-    text.className = 'code-text';
-    const sign = line.kind === 'add' ? '+' : line.kind === 'del' ? '-' : ' ';
-    // textContent preserves literal code (no HTML injection)
-    text.textContent = (sign + ' ' + (line.text ?? '')).replace(/\t/g, '  ');
-
-    row.appendChild(oldCell);
-    row.appendChild(newCell);
-    row.appendChild(text);
-    body.appendChild(row);
-  });
-
-  const wrap = document.createElement('div');
-  wrap.className = 'hunk';
-  wrap.appendChild(header);
-  wrap.appendChild(body);
-  return wrap;
-}
-
-function renderDiff(hunks, container) {
-  if (!container) { return; }
-  container.innerHTML = '';
-
-  if (!hunks || hunks.length === 0) {
-    const msg = document.createElement('div');
-    msg.style.color = '#666';
-    msg.style.fontSize = '12px';
-    msg.textContent = 'No changes.';
-    container.appendChild(msg);
-    return;
-  }
-  hunks.forEach(h => container.appendChild(renderHunk(h)));
-}
 
 }());
 

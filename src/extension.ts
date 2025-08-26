@@ -662,6 +662,8 @@ class DebugViewProvider implements vscode.WebviewViewProvider {
 		const styleVSCodeUri = webview.asWebviewUri(vscode.Uri.joinPath(this._extensionUri, 'media', 'vscode.css'));
 		const styleMainUri = webview.asWebviewUri(vscode.Uri.joinPath(this._extensionUri, 'media', 'main.css'));
 
+		const logoUri = webview.asWebviewUri(vscode.Uri.joinPath(this._extensionUri, 'images', 'logo.png'));
+
 		// Use a nonce to only allow a specific script to be run.
 		const nonce = getNonce();
 
@@ -675,8 +677,12 @@ class DebugViewProvider implements vscode.WebviewViewProvider {
 					and only allow scripts that have a specific nonce.
 					(See the 'webview-sample' extension sample for img-src content security policy examples)
 				-->
-				<meta http-equiv="Content-Security-Policy" content="default-src 'none'; style-src ${webview.cspSource}; script-src 'nonce-${nonce}';">
-
+				<meta http-equiv="Content-Security-Policy" content="
+					default-src 'none';
+					img-src ${webview.cspSource} data:;
+					style-src ${webview.cspSource} 'unsafe-inline';
+					script-src 'nonce-${nonce}';
+				">
 				<meta name="viewport" content="width=device-width, initial-scale=1.0">
 
                 <link href="${styleResetUri}" rel="stylesheet">
@@ -685,8 +691,9 @@ class DebugViewProvider implements vscode.WebviewViewProvider {
 
 				<title>Debug</title>
 			</head>
-				<body>	
+				<body>
 				<script nonce="${nonce}">
+					window.__ASSETS__ = { logo: "${logoUri}" };
                 	const workspaceData = "${workspaceFolder}";
 				</script>
 				<script nonce="${nonce}" src="${scriptUri}">

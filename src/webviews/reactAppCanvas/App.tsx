@@ -1,5 +1,84 @@
 import React, { useRef, useState, useEffect, useLayoutEffect } from "react";
+import { createPortal } from "react-dom";
 import { Card, CardContent, Typography, TextField, Collapse, Box, Fab, SvgIcon } from "@mui/material";
+
+/**
+ * Render an array of diff hunks into JSX.  Each hunk displays a header
+ * indicating the start lines in the original and modified files followed by
+ * its constituent lines.  For each line we prefix the content with a
+ * sign character (`+`, `-` or space) to denote additions, deletions or
+ * unchanged context.  Background colours mirror the GitHub diff style used
+ * in the legacy `media/main.js` implementation: green for additions,
+ * red for deletions and white for unchanged lines.  Line numbers are
+ * rendered in a right-aligned gutter.
+ *
+ * @param hunks An array of hunk objects as provided by the backend.  A
+ *              missing or empty array results in a simple "No changes"
+ *              message.
+ */
+export function DiffContent({ hunks }: { hunks: any[] | undefined }): React.ReactElement | null {
+  if (!hunks || hunks.length === 0) {
+    return (
+      <div style={{ color: '#666', fontSize: 12 }}>No changes.</div>
+    );
+  }
+  return (
+    <>
+      {hunks.map((hunk: any, idx: number) => {
+        const headerText = `@@ -${hunk.oldStart} +${hunk.newStart} @@`;
+        return (
+          <div key={idx} style={{ marginBottom: 8 }}>
+            <div
+              style={{
+                position: 'sticky',
+                top: 0,
+                zIndex: 1,
+                background: '#f5f5f5',
+                padding: '6px 10px',
+                fontFamily: 'ui-monospace, SFMono-Regular, Menlo, monospace',
+                fontSize: 12,
+              }}
+            >
+              {headerText}
+            </div>
+            <div style={{ fontFamily: 'ui-monospace, SFMono-Regular, Menlo, monospace', fontSize: 12, whiteSpace: 'pre' }}>
+              {(hunk.lines || []).map((line: any, j: number) => {
+                const kind: string = line.kind || 'ctx';
+                let sign: string;
+                if (kind === 'add') sign = '+';
+                else if (kind === 'del') sign = '-';
+                else sign = ' ';
+                // determine row background colour
+                let background: string;
+                if (kind === 'add') background = '#e6ffed';
+                else if (kind === 'del') background = '#ffeef0';
+                else background = '#ffffff';
+                return (
+                  <div
+                    key={j}
+                    style={{
+                      display: 'grid',
+                      gridTemplateColumns: '32px 32px max-content',
+                      gap: 4,
+                      padding: '1px 4px',
+                      alignItems: 'baseline',
+                    }}
+                  >
+                    <div style={{ color: '#999', textAlign: 'right', fontSize: 11, background }}>{line.oldNo ?? ''}</div>
+                    <div style={{ color: '#999', textAlign: 'right', fontSize: 11, background }}>{line.newNo ?? ''}</div>
+                    <div style={{ minWidth: 'max-content', background }}>
+                      {(sign + ' ' + (line.text ?? '')).replace(/\t/g, '  ')}
+                    </div>
+                  </div>
+                );
+              })}
+            </div>
+          </div>
+        );
+      })}
+    </>
+  );
+}
 
 /*
  * Infinite canvas with pan/zoom + draggable nodes.
@@ -26,6 +105,21 @@ type Node = {
   errorExpanded?: boolean;
   /** Node background color (CSS string). Falls back to first palette color when undefined. */
   color?: string;
+
+  /**
+   * Array of diff hunks representing changes associated with this node. Each
+   * hunk contains the starting line numbers in the original (oldStart) and
+   * modified (newStart) files along with an array of `lines`. A line object
+   * has a `kind` property ("ctx" for unchanged context, "add" for
+   * additions and "del" for deletions), the text of that line and
+   * optional old/new line numbers (`oldNo`/`newNo`).
+   *
+   * The `diffs` field is optional because older versions of the backend may
+   * not populate it; rendering code must guard against a missing or empty
+   * array. When present, its shape mirrors the objects consumed by the
+   * diff rendering helpers in the legacy `media/main.js`.
+   */
+  diffs?: any[];
 };
 
 type Props = {
@@ -342,6 +436,8 @@ function DraggableNode({
   const cardRef = useRef<HTMLDivElement | null>(null);
   const textWrapRef = useRef<HTMLDivElement | null>(null);
   const colorAnchorRef = useRef<HTMLDivElement | null>(null);
+  const outputOverlayRef = useRef<HTMLDivElement | null>(null);
+  const errorOverlayRef  = useRef<HTMLDivElement | null>(null);
 
   // Drag state only (no long-press)
   const dragRef = useRef<{ startX: number; startY: number; origX: number; origY: number } | null>(null);
@@ -352,10 +448,16 @@ function DraggableNode({
 
   const MOVE_CANCEL_PX = 4;
   const HIDE_OUTPUT_FOR_ID = 0;
+  const DIFF_MAX_LINES = 10;
+
 
   useEffect(() => {
     if (!errorExpanded && !outputExpanded) return;
-    const closeOnAnyPointerDown = () => {
+    const closeOnAnyPointerDown = (evt: PointerEvent) => {
+      const t = evt.target as globalThis.Node | null;
+      const insideOutput = !!(outputOverlayRef.current && t && outputOverlayRef.current.contains(t as any));
+      const insideError  = !!(errorOverlayRef.current  && t && errorOverlayRef.current.contains(t as any));
+      if (insideOutput || insideError) return; // allow interactions inside overlay
       if (errorExpanded) onToggleError(false);
       if (outputExpanded) onToggleOutput(false);
     };
@@ -367,6 +469,19 @@ function DraggableNode({
     const s = String(text ?? "").replace(/\r\n/g, "\n").replace(/\n+$/, "");
     return Math.max(1, s.length ? s.split("\n").length : 1);
   };
+
+  // --- Diff popover: hover to show, centered at cursor, closes on mouse leave ---
+  const [diffOpen, setDiffOpen] = useState(false);
+  const [diffPos, setDiffPos] = useState<{ x: number; y: number }>({ x: 0, y: 0 });
+
+  function centerPopoverAt(e: { clientX: number; clientY: number }) {
+    const { clientX, clientY } = e;
+    // clamp to viewport so the centered popover never renders off-screen
+    const pad = 12;
+    const x = Math.max(pad, Math.min(window.innerWidth - pad, clientX));
+    const y = Math.max(pad, Math.min(window.innerHeight - pad, clientY));
+    setDiffPos({ x, y });
+  }
 
   const outputRows = Math.min(5, countLines(node.runOutput));
   const errorRows = Math.min(5, countLines(node.runError));
@@ -490,8 +605,19 @@ function DraggableNode({
     setColorMenuOpen(false);
   };
 
+  // Pick black/white for contrast against the currentColor
+function readableOn(hex: string): string {
+  const m = /^#?([a-f\d]{2})([a-f\d]{2})([a-f\d]{2})$/i.exec(hex || "");
+  if (!m) return "#000";
+  const [r, g, b] = [m[1], m[2], m[3]].map(v => parseInt(v, 16) / 255);
+  const srgb = (v: number) => (v <= 0.03928 ? v / 12.92 : Math.pow((v + 0.055) / 1.055, 2.4));
+  const L = 0.2126 * srgb(r) + 0.7152 * srgb(g) + 0.0722 * srgb(b);
+  return L > 0.6 ? "#000" : "#fff";
+}
+
   const hasOutput = !!(node.runOutput && String(node.runOutput).trim().length);
-  const hideOutput = node.id === HIDE_OUTPUT_FOR_ID;
+  const hideOutput = node.id === 0; // HIDE_OUTPUT_FOR_ID
+  const iconColor = readableOn(currentColor);
 
   return (
     <Card
@@ -614,7 +740,7 @@ function DraggableNode({
               sx={{
                 position: "absolute",
                 right: 8,          // bottom-right of the text wrapper
-                bottom: 8,
+                bottom: 0,
                 width: 32,
                 height: 32,
                 minHeight: 32,
@@ -637,6 +763,7 @@ function DraggableNode({
         {/* Expanded content below; pencil stays anchored to the text area above */}
         <Collapse in={expanded} unmountOnExit sx={{ mt: 1 }}>
           <Box>
+            {/* Output section */}
             {!hideOutput && (hasOutput ? (
               <Box sx={{ position: "relative" }}>
                 <div data-drag-surface="true" data-open-on-tap="output" style={{ userSelect: "none" }}>
@@ -672,7 +799,7 @@ function DraggableNode({
 
                 {outputExpanded && (
                   <Box
-                    onClick={() => onToggleOutput(false)}
+                    ref={outputOverlayRef}
                     sx={{
                       position: "absolute",
                       zIndex: 20,
@@ -691,6 +818,8 @@ function DraggableNode({
                       boxShadow: 6,
                       p: 1,
                     }}
+                    onMouseLeave={() => onToggleOutput(false)}   // close on hover-out
+                    onPointerDown={(e) => e.stopPropagation()}   // allow selection without closing
                   >
                     <pre style={{
                       margin: 0, padding: 8, fontFamily: "ui-monospace, SFMono-Regular, Menlo, monospace",
@@ -703,6 +832,7 @@ function DraggableNode({
               </Box>
             ) : null)}
 
+            {/* Error section */}
             {hasError && (
               <Box sx={{ position: "relative" }}>
                 <div data-drag-surface="true" data-open-on-tap="error" style={{ userSelect: "none" }}>
@@ -738,7 +868,7 @@ function DraggableNode({
 
                 {errorExpanded && (
                   <Box
-                    onClick={() => onToggleError(false)}
+                    ref={errorOverlayRef}
                     sx={{
                       position: "absolute",
                       zIndex: 20,
@@ -757,6 +887,8 @@ function DraggableNode({
                       boxShadow: 6,
                       p: 1,
                     }}
+                    onMouseLeave={() => onToggleError(false)}     // close on hover-out
+                    onPointerDown={(e) => e.stopPropagation()}    // allow selection without closing
                   >
                     <pre style={{
                       margin: 0, padding: 8, fontFamily: "ui-monospace, SFMono-Regular, Menlo, monospace",
@@ -769,12 +901,21 @@ function DraggableNode({
               </Box>
             )}
 
-            {/* Colour selector */}
-            <Box sx={{ mt: 1 }}>
+            {/* Colour selector and diff button */}
+            <Box
+              sx={{
+                mt: 1,
+                display: 'grid',
+                gridTemplateColumns: 'auto 1fr auto', // left item, center area, right spacer
+                alignItems: 'center',
+                columnGap: 1,
+              }}
+            >
+              {/* Colour picker */}
               <div
                 ref={colorAnchorRef as any}
                 data-interactive="true"
-                style={{ position: "relative", display: "inline-block" }}
+                style={{ position: 'relative', display: 'inline-block' }}
               >
                 {/* Trigger circle with theme-aware darker border and correct backgroundColor prop */}
                 <Box
@@ -782,35 +923,47 @@ function DraggableNode({
                   sx={(theme) => ({
                     width: 24,
                     height: 24,
-                    borderRadius: "50%",
-                    backgroundColor: currentColor, // use backgroundColor for raw hex
-                    border: "2px solid",
-                    borderColor: theme.palette.mode === "dark" ? theme.palette.grey[400] : theme.palette.grey[700],
-                    cursor: "pointer",
+                    borderRadius: '50%',
+                    backgroundColor: currentColor,
+                    border: '2px solid',
+                    borderColor: theme.palette.mode === 'dark' ? theme.palette.grey[400] : theme.palette.grey[700],
+                    cursor: 'pointer',
+                    display: 'grid',
+                    placeItems: 'center',          // <-- centers the icon
                   })}
-                />
+                >
+                  {/* Inline eyedropper icon (no extra package needed) */}
+                  <SvgIcon
+                    viewBox="0 0 24 24"
+                    fontSize="inherit"
+                    sx={{ fontSize: 14, color: iconColor, opacity: 0.95, pointerEvents: 'none' }}
+                  >
+                    <path d="M20.71 5.63l-2.34-2.34a1 1 0 0 0-1.42 0L15 4.24 19.76 9l1.95-1.95a1 1 0 0 0 0-1.42z" />
+                    <path d="M14.06 6.17L4 16.24V20h3.76l10.06-10.06-3.76-3.77z" />
+                  </SvgIcon>
+                </Box>
                 {colorMenuOpen && (
                   <Box
                     sx={{
-                      position: "absolute",
+                      position: 'absolute',
                       top: 32,
                       left: 0,
                       zIndex: 30,
-                      bgcolor: "background.paper",
-                      border: "1px solid",
-                      borderColor: "divider",
+                      bgcolor: 'background.paper',
+                      border: '1px solid',
+                      borderColor: 'divider',
                       borderRadius: 1,
                       boxShadow: 6,
                       p: 1,
-                      width: "max-content",      // ⬅️ let content decide width
-                      maxWidth: "90vw",
+                      width: 'max-content',
+                      maxWidth: '90vw',
                     }}
                     onPointerDown={(e) => e.stopPropagation()}
                   >
-                    <Typography variant="caption" sx={{ fontWeight: 500, mb: 0.5 }}>
+                    <Typography variant='caption' sx={{ fontWeight: 500, mb: 0.5 }}>
                       Colors
                     </Typography>
-                    <Box sx={{ display: "grid", gridTemplateColumns: `repeat(${COLOR_PALETTE.length}, 20px)`, gap: 0.5, mb: 1 }}>
+                    <Box sx={{ display: 'grid', gridTemplateColumns: `repeat(${COLOR_PALETTE.length}, 20px)`, gap: 0.5, mb: 1 }}>
                       {COLOR_PALETTE.map((c) => (
                         <Box
                           key={c}
@@ -818,32 +971,32 @@ function DraggableNode({
                           sx={(theme) => ({
                             width: 20,
                             height: 20,
-                            borderRadius: "50%",
+                            borderRadius: '50%',
                             backgroundColor: c, // use backgroundColor for raw hex
-                            border: "2px solid",
+                            border: '2px solid',
                             borderColor: c === currentColor
                               ? theme.palette.primary.main
-                              : (theme.palette.mode === "dark" ? theme.palette.grey[400] : theme.palette.grey[700]),
-                            display: "flex",
-                            alignItems: "center",
-                            justifyContent: "center",
-                            cursor: "pointer",
-                            "&:hover": {
+                              : (theme.palette.mode === 'dark' ? theme.palette.grey[400] : theme.palette.grey[700]),
+                            display: 'flex',
+                            alignItems: 'center',
+                            justifyContent: 'center',
+                            cursor: 'pointer',
+                            '&:hover': {
                               borderColor: c === currentColor
                                 ? theme.palette.primary.dark
-                                : (theme.palette.mode === "dark" ? theme.palette.grey[300] : theme.palette.grey[800]),
+                                : (theme.palette.mode === 'dark' ? theme.palette.grey[300] : theme.palette.grey[800]),
                             },
                           })}
                         >
                           {c === currentColor && (
-                            <svg width="10" height="10" viewBox="0 0 16 16">
+                            <svg width='10' height='10' viewBox='0 0 16 16'>
                               <path
-                                d="M4,8 L7,11 L12,5"
-                                stroke={c === DEFAULT_COLOR ? "#000" : "#fff"}
-                                strokeWidth="2"
-                                fill="none"
-                                strokeLinecap="round"
-                                strokeLinejoin="round"
+                                d='M4,8 L7,11 L12,5'
+                                stroke={c === DEFAULT_COLOR ? '#000' : '#fff'}
+                                strokeWidth='2'
+                                fill='none'
+                                strokeLinecap='round'
+                                strokeLinejoin='round'
                               />
                             </svg>
                           )}
@@ -853,24 +1006,93 @@ function DraggableNode({
                     <Box
                       onClick={(e) => { e.stopPropagation(); handleSelectColor(DEFAULT_COLOR); }}
                       sx={{
-                        display: "flex",
-                        alignItems: "center",
+                        display: 'flex',
+                        alignItems: 'center',
                         px: 0.5,
                         py: 0.75,
                         borderRadius: 1,
-                        cursor: "pointer",
-                        "&:hover": { bgcolor: "action.hover" },
+                        cursor: 'pointer',
+                        '&:hover': { bgcolor: 'action.hover' },
                       }}
                     >
-                      <svg width="16" height="16" viewBox="0 0 24 24" style={{ marginRight: 6 }}>
-                        <path d="M12 4C12 4 7 10 7 14C7 16.7614 9.23858 19 12 19C14.7614 19 17 16.7614 17 14C17 10 12 4 12 4Z" fill="currentColor" />
-                        <line x1="4" y1="4" x2="20" y2="20" stroke="currentColor" strokeWidth="2" />
+                      <svg width='16' height='16' viewBox='0 0 24 24' style={{ marginRight: 6 }}>
+                        <path d='M12 4C12 4 7 10 7 14C7 16.7614 9.23858 19 12 19C14.7614 19 17 16.7614 17 14C17 10 12 4 12 4Z' fill='currentColor' />
+                        <line x1='4' y1='4' x2='20' y2='20' stroke='currentColor' strokeWidth='2' />
                       </svg>
-                      <Typography variant="body2">Reset</Typography>
+                      <Typography variant='body2'>Reset</Typography>
                     </Box>
                   </Box>
                 )}
               </div>
+
+              {/* Diff button + overlay (cursor-centered on hover, closes on leave) */}
+              <div
+                data-interactive="true"
+                style={{ position: 'relative', display: 'inline-block', justifySelf: 'center', }}
+              >
+                <button
+                  // open + position at cursor when hovering the button
+                  onMouseEnter={(e) => { centerPopoverAt(e); setDiffOpen(true); }}
+                  // track cursor while over button (optional)
+                  onMouseMove={(e) => { if (diffOpen) centerPopoverAt(e); }}
+                  onClick={(e) => { e.stopPropagation(); /* no pinning */ }}
+                  style={{
+                    border: '1px solid #ccc',
+                    background: '#f5f5f5',
+                    color: '#333',
+                    borderRadius: 4,
+                    padding: '2px 6px',
+                    fontSize: '0.7rem',
+                    cursor: 'pointer',
+                  }}
+                >
+                  Show Diff
+                </button>
+
+                {diffOpen && createPortal(
+  <Box
+    sx={{
+      position: 'fixed',
+      left: diffPos.x,
+      top: diffPos.y,
+      transform: 'translate(-50%, -50%)',
+      zIndex: 3000,
+      bgcolor: 'background.paper',
+      border: '1px solid',
+      borderColor: 'divider',
+      borderRadius: 1,
+      boxShadow: 6,
+      p: 1,
+      width: 'max-content',
+      maxWidth: '90vw',
+      // Let the INNER wrapper handle scrolling/height; keep this one unbounded.
+      // This way the sticky hunk headers stay sticky relative to the scroll area.
+      '& *': { userSelect: 'text' },
+    }}
+    onMouseLeave={() => setDiffOpen(false)}
+    onPointerDown={(e) => e.stopPropagation()}  // allow selection/clicks without closing
+    onWheel={(e) => e.stopPropagation()}        // prevent canvas zoom while scrolling popover
+  >
+    {/* Inner scroll area: ~10 lines tall, sticky headers still work */}
+    <Box
+      sx={{
+        fontFamily: 'ui-monospace, SFMono-Regular, Menlo, monospace',
+        fontSize: 12,
+        lineHeight: 1.35,
+        // Approx height of ~10 lines of code; adjust lineHeight if you tweak row spacing
+        maxHeight: `calc(${DIFF_MAX_LINES} * 1.35em)`,
+        overflow: 'auto',
+      }}
+    >
+      <DiffContent hunks={(node.diffs as any[]) || []} />
+    </Box>
+  </Box>,
+  document.body
+)}
+
+              </div>
+              {/* RIGHT: spacer to mirror the color circle’s width (24 + 2px border*2 = ~28) */}
+              <Box sx={{ width: 28, height: 1 }} aria-hidden />
             </Box>
           </Box>
         </Collapse>
