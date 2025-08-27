@@ -52,7 +52,7 @@
   // --- 64×64 logo (append after document.body.innerHTML) ---
   (function mountLogo() {
     const url = (window.__ASSETS__ && window.__ASSETS__.logo) || '';
-    if (!url) return;
+    if (!url) { return; }
 
     const target = document.getElementById('view2') || document.body; // choose your target
 
@@ -235,21 +235,7 @@
                   updateExplorationText();
                   let nodeArray = Object.values(nodes);
                   vscode.postMessage({ type: 'updateGraph', command: "showD3Graph", treeData: nodeArray, activeNode: newActiveNode });
-                  /* debug stuff */
-                  document.getElementById('htmlCount').innerHTML = nodeCount;
-                  document.getElementById('fileChanged').style.background = 'DodgerBlue';
-                  document.getElementById('pyRun').style.background = 'DodgerBlue';
                   vscode.postMessage({ type: 'createCommit', command: "showD3Graph", activeNode: activeNode, childCheck: childCheck, parentBranch: parentBranch, parentCommit: parentCommit });
-                  break;
-              }
-          case 'fileChanged':
-              {
-                  document.getElementById('fileChanged').style.background = 'MediumSeaGreen';
-                  break;
-              }
-          case 'pythonRan':
-              {
-                  document.getElementById('pyRun').style.background = 'MediumSeaGreen';
                   break;
               }
           case 'resetNewNodeDebug':

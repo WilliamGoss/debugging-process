@@ -949,24 +949,34 @@ async function summarizeChanges(parentCommit: string, newCommit: string, dir: st
 	
 	const diffString = JSON.stringify(diffs);
 
-	const apiKey = await getOpenAIKey(ctx);
-	if (!apiKey) {
-	  return ['No summary available.', diffs];
-	}
+	// Point to your Flask endpoint
+	const FLASK_URL =
+	process.env.FLASK_URL ?? "https://debugging.web.illinois.edu/request_summary";
 
-	const client = new OpenAI({ apiKey});
+	const summary = await (async () => {
+	const ac = new AbortController();
+	const timer = setTimeout(() => ac.abort(), 10_000); // 10s timeout
 
-	const query = await client.chat.completions.create({
-		model: "gpt-4o-mini",
-		messages: [
-			{ role: "system", content: "You are a helpful assistant that summarizes code diffs in a single sentence. Keep all of your responses limited to one sentence and less than 40 words. I will pass you an object that contains the original code and changes to the code. Use that object to determine what changes were made."},
-			{ role: "user", content: `Summarize these code changes: \n${diffString}` }
-		]
+	try {
+	const res = await fetch(FLASK_URL, {
+		method: "POST",
+		headers: { "Content-Type": "application/json" },
+		body: JSON.stringify({ diffString }),
+		signal: ac.signal,
 	});
+	clearTimeout(timer);
 
-	const summary = query.choices[0].message?.content ?? "No summary available.";
+	if (!res.ok) { throw new Error(`HTTP ${res.status}`); }
 
-	//Update the corresponding node's text.
+	const data = (await res.json()) as { summary?: string };
+	const s = (data.summary ?? "").trim();
+	return s || "No summary available.";
+	} catch (err) {
+	// Optionally log err to your extension output channel
+	return "No summary available.";
+	}
+	})();
+
 	return [summary, diffs];
 }
 

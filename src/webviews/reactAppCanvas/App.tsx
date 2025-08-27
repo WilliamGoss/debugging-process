@@ -45,14 +45,14 @@ export function DiffContent({ hunks }: { hunks: any[] | undefined }): React.Reac
               {(hunk.lines || []).map((line: any, j: number) => {
                 const kind: string = line.kind || 'ctx';
                 let sign: string;
-                if (kind === 'add') sign = '+';
-                else if (kind === 'del') sign = '-';
-                else sign = ' ';
+                if (kind === 'add') { sign = '+'; }
+                else if (kind === 'del') { sign = '-'; }
+                else { sign = ' '; }
                 // determine row background colour
                 let background: string;
-                if (kind === 'add') background = '#e6ffed';
-                else if (kind === 'del') background = '#ffeef0';
-                else background = '#ffffff';
+                if (kind === 'add') { background = '#e6ffed'; }
+                else if (kind === 'del') { background = '#ffeef0'; }
+                else { background =  '#ffffff'; }
                 return (
                   <div
                     key={j}
@@ -188,8 +188,8 @@ export default function NodeCanvas({
           ty: from.ty + (target.ty - from.ty) * k,
           scale: from.scale + (target.scale - from.scale) * k,
         });
-        if (t < 1) animRef.current = requestAnimationFrame(step);
-        else animRef.current = null;
+        if (t < 1) { animRef.current = requestAnimationFrame(step); }
+        else { animRef.current = null; }
       };
       animRef.current = requestAnimationFrame(step);
     });
@@ -197,11 +197,11 @@ export default function NodeCanvas({
 
   function centerOnNode(id: number) {
     const container = containerRef.current;
-    if (!container) return;
+    if (!container) { return; }
   
     // find node & measure its current size (fallback to constants)
     const node = nodes.find(n => Number(n.id) === Number(id));
-    if (!node) return;
+    if (!node) { return; }
   
     const el = container.querySelector(`.canvas-node[data-node-id="${id}"]`) as HTMLElement | null;
     const CARD_W = el?.offsetWidth ?? 250;
@@ -225,28 +225,28 @@ export default function NodeCanvas({
   
   function centerOnActiveNode() {
     const id = Number(activeNodeId);
-    if (Number.isFinite(id)) centerOnNode(id);
-    else resetView(); // fallback if nothing is active
+    if (Number.isFinite(id)) { centerOnNode(id); }
+    else { resetView(); } // fallback if nothing is active
   }
 
   // --- Initial center + fly-to-active ---------------------------------------
 
   useLayoutEffect(() => {
     const container = containerRef.current;
-    if (!container) return;
+    if (!container) { return; }
 
     if (centeredOnRef.current === null) {
       setTransform({ tx: container.clientWidth / 2, ty: container.clientHeight / 2, scale: INITIAL_SCALE });
       centeredOnRef.current = "origin";
     }
 
-    if (activeNodeId === null || centeredOnRef.current === activeNodeId) return;
+    if (activeNodeId === null || centeredOnRef.current === activeNodeId) { return; }
 
     const id = Number(activeNodeId);
-    if (!Number.isFinite(id)) return;
+    if (!Number.isFinite(id)) { return; }
 
     const node = nodes.find((n) => Number(n.id) === id);
-    if (!node) return;
+    if (!node) { return; }
 
     const CARD_W = 250;
     const CARD_H = 100;
@@ -273,8 +273,8 @@ export default function NodeCanvas({
   const panStartRef = useRef<{ x: number; y: number; tx: number; ty: number }>({ x: 0, y: 0, tx: 0, ty: 0 });
 
   const handlePointerDown = (e: React.PointerEvent<HTMLDivElement>) => {
-    if (e.button !== 0) return;
-    if (e.currentTarget !== e.target) return; // only start pan on empty canvas (not children)
+    if (e.button !== 0) { return; }
+    if (e.currentTarget !== e.target) { return; }// only start pan on empty canvas (not children)
     cancelAnim();
     isPanningRef.current = true;
     panStartRef.current = { x: e.clientX, y: e.clientY, tx: transform.tx, ty: transform.ty };
@@ -282,7 +282,7 @@ export default function NodeCanvas({
   };
 
   const handlePointerMove = (e: React.PointerEvent<HTMLDivElement>) => {
-    if (!isPanningRef.current) return;
+    if (!isPanningRef.current) { return; }
     e.preventDefault();
     const dx = e.clientX - panStartRef.current.x;
     const dy = e.clientY - panStartRef.current.y;
@@ -320,7 +320,7 @@ export default function NodeCanvas({
 
   const zoomRelative = (factor: number) => {
     const container = containerRef.current;
-    if (!container) return;
+    if (!container) { return; }
     cancelAnim();
     const { clientWidth, clientHeight } = container;
     const centerX = clientWidth / 2;
@@ -335,7 +335,7 @@ export default function NodeCanvas({
 
   const resetView = () => {
     const container = containerRef.current;
-    if (!container) return;
+    if (!container) { return; }
     cancelAnim();
     setTransform({ tx: container.clientWidth / 2, ty: container.clientHeight / 2, scale: INITIAL_SCALE });
   };
@@ -452,14 +452,14 @@ function DraggableNode({
 
 
   useEffect(() => {
-    if (!errorExpanded && !outputExpanded) return;
+    if (!errorExpanded && !outputExpanded) { return; }
     const closeOnAnyPointerDown = (evt: PointerEvent) => {
       const t = evt.target as globalThis.Node | null;
       const insideOutput = !!(outputOverlayRef.current && t && outputOverlayRef.current.contains(t as any));
       const insideError  = !!(errorOverlayRef.current  && t && errorOverlayRef.current.contains(t as any));
-      if (insideOutput || insideError) return; // allow interactions inside overlay
-      if (errorExpanded) onToggleError(false);
-      if (outputExpanded) onToggleOutput(false);
+      if (insideOutput || insideError) { return; } // allow interactions inside overlay
+      if (errorExpanded) { onToggleError(false); }
+      if (outputExpanded) { onToggleOutput(false); }
     };
     window.addEventListener("pointerdown", closeOnAnyPointerDown, true);
     return () => window.removeEventListener("pointerdown", closeOnAnyPointerDown, true);
@@ -491,12 +491,12 @@ function DraggableNode({
   const [draft, setDraft] = useState(node.text);
   const editRef = useRef<HTMLInputElement | HTMLTextAreaElement>(null);
 
-  useEffect(() => { if (!isEditing) setDraft(node.text); }, [node.text, isEditing]);
+  useEffect(() => { if (!isEditing) {setDraft(node.text); }}, [node.text, isEditing]);
 
   useEffect(() => {
-    if (!isEditing) return;
+    if (!isEditing) { return; }
     const raf = requestAnimationFrame(() => {
-      const el = editRef.current; if (!el) return;
+      const el = editRef.current; if (!el) { return; }
       try { el.focus({ preventScroll: true }); } catch { el.focus(); }
       const len = (el as HTMLInputElement | HTMLTextAreaElement).value.length;
       try { (el as HTMLInputElement | HTMLTextAreaElement).setSelectionRange(len, len); }
@@ -509,12 +509,12 @@ function DraggableNode({
     const next = save ? draft : node.text;
     setIsEditing(false);
     setDraft(next);
-    if (save && next !== node.text) onChangeText(node.id, next);
+    if (save && next !== node.text) { onChangeText(node.id, next); }
   };
 
   // ---- Card pointer handlers: drag + open overlays on simple taps ----
   const handlePointerDown = (e: React.PointerEvent<HTMLDivElement>) => {
-    if (e.button !== 0) return;
+    if (e.button !== 0) { return; }
 
     const targetEl = e.target as Element | null;
 
@@ -530,7 +530,7 @@ function DraggableNode({
       (!inDragSurface && !!targetEl?.closest(interactiveSelector)) ||
       (colorAnchorRef.current && targetEl && colorAnchorRef.current.contains(targetEl));
 
-    if (clickedInteractive) return;
+    if (clickedInteractive) { return; }
 
     dragRef.current = { startX: e.clientX, startY: e.clientY, origX: node.x, origY: node.y };
     isDraggingRef.current = false;
@@ -538,7 +538,7 @@ function DraggableNode({
   };
 
   const handlePointerMove = (e: React.PointerEvent<HTMLDivElement>) => {
-    if (!dragRef.current) return;
+    if (!dragRef.current) { return; }
     e.preventDefault(); // stop native selection while dragging
     const dx = (e.clientX - dragRef.current.startX) / scale;
     const dy = (e.clientY - dragRef.current.startY) / scale;
@@ -566,8 +566,8 @@ function DraggableNode({
     const tapKind = tapKindRef.current;
     tapKindRef.current = null;
     if (wasTap && tapKind) {
-      if (tapKind === "output") onToggleOutput(true);
-      else if (tapKind === "error") onToggleError(true);
+      if (tapKind === "output") { onToggleOutput(true); }
+      else if (tapKind === "error") { onToggleError(true); }
     }
   };
 
@@ -589,11 +589,11 @@ function DraggableNode({
   const [colorMenuOpen, setColorMenuOpen] = useState(false);
 
   useEffect(() => {
-    if (!colorMenuOpen) return;
+    if (!colorMenuOpen) { return; }
     const handleClose = (e: PointerEvent) => {
       if (!colorAnchorRef.current) { setColorMenuOpen(false); return; }
       const target = e.target as globalThis.Node | null;
-      if (target && !colorAnchorRef.current.contains(target)) setColorMenuOpen(false);
+      if (target && !colorAnchorRef.current.contains(target)) { setColorMenuOpen(false); }
     };
     window.addEventListener("pointerdown", handleClose, true);
     return () => window.removeEventListener("pointerdown", handleClose, true);
@@ -608,7 +608,7 @@ function DraggableNode({
   // Pick black/white for contrast against the currentColor
 function readableOn(hex: string): string {
   const m = /^#?([a-f\d]{2})([a-f\d]{2})([a-f\d]{2})$/i.exec(hex || "");
-  if (!m) return "#000";
+  if (!m) { return "#000"; }
   const [r, g, b] = [m[1], m[2], m[3]].map(v => parseInt(v, 16) / 255);
   const srgb = (v: number) => (v <= 0.03928 ? v / 12.92 : Math.pow((v + 0.055) / 1.055, 2.4));
   const L = 0.2126 * srgb(r) + 0.7152 * srgb(g) + 0.0722 * srgb(b);
@@ -688,7 +688,7 @@ function readableOn(hex: string): string {
         </svg>
       </div>
 
-      <CardContent sx={{ p: 1, pt: 0.75, pb: 0.25, "&:last-child": { pb: 0.25 } }}>
+      <CardContent sx={{ p: 0.5, pt: 0.75, pb: 0.25, "&:last-child": { pb: 0.25 } }}>
         {/* TEXT AREA WRAPPER: anchor the pencil here */}
         <Box sx={{ position: "relative" }}>
           {!isEditing ? (
@@ -696,7 +696,7 @@ function readableOn(hex: string): string {
               <Typography
                 variant="body1"
                 sx={{
-                  pr: 7,            // room for the circular button on the right
+                  pr: 1,            // room for the circular button on the right
                   pb: 3,            // reserve vertical room so the Fab doesn't overlap text
                   whiteSpace: "pre-wrap",
                   wordBreak: "break-word",
@@ -723,7 +723,9 @@ function readableOn(hex: string): string {
                 else if (e.key === "Escape") { e.preventDefault(); commit(false); }
               }}
               inputProps={{ spellCheck: false }}
-              sx={{ "& .MuiInputBase-input": { fontSize: "1rem", lineHeight: 1.4 } }}
+              sx={{ 
+                "& .MuiInputBase-input": { fontSize: "1rem", lineHeight: 1.4 },
+                "& .MuiOutlinedInput-inputMultiline": { padding: "8px 7px", }}}
             />
           )}
 
@@ -1034,7 +1036,7 @@ function readableOn(hex: string): string {
                   // open + position at cursor when hovering the button
                   onMouseEnter={(e) => { centerPopoverAt(e); setDiffOpen(true); }}
                   // track cursor while over button (optional)
-                  onMouseMove={(e) => { if (diffOpen) centerPopoverAt(e); }}
+                  onMouseMove={(e) => { if (diffOpen) { centerPopoverAt(e); } }}
                   onClick={(e) => { e.stopPropagation(); /* no pinning */ }}
                   style={{
                     border: '1px solid #ccc',
