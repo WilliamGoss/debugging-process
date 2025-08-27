@@ -361,6 +361,8 @@
       textAreaObject.value = '';
       updateExplorationText();
       vscode.postMessage({ type: 'initializeRepo' });
+      let nodeArray = Object.values(nodes);
+      vscode.postMessage({ type: 'updateGraph', command: "showD3Graph", treeData: nodeArray, activeNode: 0 });
   }
 
   // Build a serializable snapshot of your viz state
