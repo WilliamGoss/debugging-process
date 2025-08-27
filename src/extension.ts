@@ -900,25 +900,6 @@ function clearDirectory(dirPath: string) {
 	});
 }
 
-//TODO REMOVE THIS
-async function getOpenAIKey(ctx: vscode.ExtensionContext): Promise<string | undefined> {
-	const fromSecrets = await ctx.secrets.get('openai.apiKey');
-	if (fromSecrets) { return fromSecrets; }
-  
-	if (process.env.OPENAI_API_KEY?.trim()) { return process.env.OPENAI_API_KEY.trim(); }
-  
-	const input = await vscode.window.showInputBox({
-	  prompt: 'Enter your OpenAI API key to enable change summaries',
-	  placeHolder: 'sk-...',
-	  password: true,
-	  ignoreFocusOut: true
-	});
-	if (!input?.trim()) { return; }
-	await ctx.secrets.store('openai.apiKey', input.trim());
-	vscode.window.showInformationMessage('OpenAI API key saved securely.');
-	return input.trim();
-  }
-
 //Make this an API call on a server if there is time... 
 async function summarizeChanges(parentCommit: string, newCommit: string, dir: string, gdir: string, ctx: vscode.ExtensionContext) {
 

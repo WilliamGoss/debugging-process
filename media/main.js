@@ -177,7 +177,7 @@
                   // cards with long text no longer collide with their
                   // children and cards with short/medium text produce
                   // reasonably similar gaps.
-                  const APPROX_CHARS_PER_LINE = 26;
+                  const APPROX_CHARS_PER_LINE = 24;
                   const TEXT_ROW_HEIGHT = 24;
                   const BASE_SPACING = 50;
                   let textHeight = 0;
@@ -196,8 +196,8 @@
                   }
                   let cardHeight = textHeight;
                   // If the card is expanded, add height for runtime output and error panels
-                  const ROW_HEIGHT = 20;
-                  const FIELD_BASE = 50;
+                  const ROW_HEIGHT = 30;
+                  const FIELD_BASE = 40;
                   if (parentNode && parentNode.expanded) {
                       let extraHeight = 0;
                       const hasOutput = parentNode.runOutput && String(parentNode.runOutput).trim().length > 0;
@@ -217,7 +217,7 @@
                       cardHeight += extraHeight;
                   }
                   // Add a small margin so that cards don't touch
-                  const MARGIN = 60;
+                  const MARGIN = 120;
                   const newYValue = parentNode ? parentNode.y + cardHeight + MARGIN : 0;
                   // Align the new node horizontally with its parent
                   const newXValue = parentNode ? parentNode.x : 0;
