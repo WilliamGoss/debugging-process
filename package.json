@@ -47,7 +47,7 @@
         "title": "Update Node Text"
       },
       {
-        "command": "extension.export",
+        "command": "extension.exportData",
         "title": "Export Data"
       },
       {
@@ -76,14 +76,6 @@
         "title": "Open Tool",
         "category": "Visualization",
         "icon": "$(graph)"
-      },
-      {
-        "command": "extension.setOpenAIKey",
-        "title": "Debug: Set OpenAI API Key"
-      },
-      {
-        "command": "extension.clearOpenAIKey",
-        "title": "Debug: Clear OpenAI API Key"
       }
     ],
     "menus": {

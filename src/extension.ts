@@ -342,32 +342,73 @@ export async function activate(context: vscode.ExtensionContext) {
         })
     );
 
-	// This command should be used to export the users github and graph with nodes to allow rebuilding.
 	context.subscriptions.push(
-		vscode.commands.registerCommand('extension.exportData', (treeData = {}) => {
-			if (workspaceFolder !== null) {
-				if (graphView) {
-					graphView.dispose();
+		vscode.commands.registerCommand(
+		  'extension.exportData',
+		  async (treeData: unknown = {}): Promise<boolean> => {
+			try {
+			  // Ensure a workspace is open
+			  const workspaceFolder = vscode.workspace.workspaceFolders?.[0]?.uri;
+			  if (!workspaceFolder) {
+				vscode.window.showErrorMessage('Open a folder/workspace before exporting.');
+				return false;
+			  }
+	  
+			  const gitSourceUri = getGitDirUri(context);
+	  
+			  const picked = await vscode.window.showOpenDialog({
+				canSelectFiles: false,
+				canSelectFolders: true,
+				canSelectMany: false,
+				openLabel: 'Select export destination'
+			  });
+			  if (!picked?.[0]) {
+				return false; // user cancelled -> return a boolean, not undefined
+			  }
+	  
+			  // 1) Try to name by first .py; 2) fallback to timestamp
+			  let folderName = await pickExportFolderNameFromFirstPy(workspaceFolder);
+			  if (!folderName) {
+				folderName = `export-${new Date().toISOString().replace(/[:.]/g, '-')}`;
+			  }
+	  
+			  // create a unique export directory under the chosen folder
+			  const exportRoot = await ensureUniqueExportDir(picked[0], folderName);
+			  const gitDestUri = vscode.Uri.joinPath(exportRoot, 'git');
+			  const vizDestUri = vscode.Uri.joinPath(exportRoot, 'viz');
+			  const dataFileUri = vscode.Uri.joinPath(vizDestUri, 'data.json');
+	  
+			  await vscode.window.withProgress(
+				{ location: vscode.ProgressLocation.Notification, title: 'Exporting .git and viz data…' },
+				async () => {
+				  await safeMkdir(vizDestUri);
+	  
+				  if (await exists(gitSourceUri)) {
+					await copyTree(gitSourceUri, gitDestUri);
+				  } else {
+					vscode.window.showWarningMessage(
+					  'No Git repo found in globalStorage; skipping Git export.'
+					);
+				  }
+	  
+				  await writeJson(dataFileUri, treeData);
+	  
+				  // If you truly want to wipe storage after export, keep this line.
+				  // Otherwise, comment it out so users can keep working:
+				  // await clearDirectory(context.globalStorageUri);
 				}
-				// Create a git folder inside the workspace
-				const gitCopyPath = path.join(workspaceFolder, 'git');
-				createFolder(gitCopyPath);
-				// Copy all the contents from the git repo into the new folder
-				copyFiles(globalStoragePath, gitCopyPath);
-				// Create a folder for the node data to recreate the viz
-				const vizCopyPath = path.join(workspaceFolder, 'viz');
-				saveJsonFile(vizCopyPath, treeData);
-				clearDirectory(globalStoragePath);
+			  );
+	  
+			  vscode.window.showInformationMessage(`Export complete: ${exportRoot.fsPath}`);
+			  return true; // <-- success
+			} catch (err) {
+			  console.error('exportData failed:', err);
+			  vscode.window.showErrorMessage('Export failed. See logs for details.');
+			  return false; // <-- failure
 			}
-		})
-	);
-
-	// Helper command for the above command, since we need to call main.js to send the data out
-	context.subscriptions.push(
-		vscode.commands.registerCommand('extension.export', () => {
-			provider.receiveInformation("triggerExport", {});
-        })
-	);
+		  }
+		)
+	  );
 
 	//New View
 	context.subscriptions.push(
@@ -393,31 +434,6 @@ export async function activate(context: vscode.ExtensionContext) {
 			  const nonce = getNonce();
 		  
 			  panel.webview.html = (canvasProvider as any)._getHtml(webviewScriptUri, nonce);
-		})
-	);
-
-	//TODO REMOVE THESE WHEN SERVER IS UP
-	// Command: Set OpenAI API Key
-	context.subscriptions.push(
-		vscode.commands.registerCommand('extension.setOpenAIKey', async () => {
-		const input = await vscode.window.showInputBox({
-			prompt: 'Enter your OpenAI API key',
-			placeHolder: 'sk-...',
-			password: true,
-			ignoreFocusOut: true,
-			validateInput: (v) => v.trim().startsWith('sk-') ? undefined : 'Key should start with "sk-".'
-		});
-		if (!input) { return; }
-		await context.secrets.store('openai.apiKey', input.trim());
-		vscode.window.showInformationMessage('OpenAI API key saved securely.');
-		})
-	);
-	
-	// Command: Clear OpenAI API Key
-	context.subscriptions.push(
-		vscode.commands.registerCommand('extension.clearOpenAIKey', async () => {
-		await context.secrets.delete('openai.apiKey');
-		vscode.window.showInformationMessage('OpenAI API key removed.');
 		})
 	);
 
@@ -477,12 +493,6 @@ class DebugViewProvider implements vscode.WebviewViewProvider {
 						vscode.commands.executeCommand('extension.updateGraph', treeData, activeNode);
 						break;
 					}
-				case 'getExport':
-					{
-						const treeData = data.treeData;
-						vscode.commands.executeCommand('extension.exportData', treeData);
-						break;
-					}
 				case 'updateNodeText':
 					{
 						const activeNode = data.activeNode;
@@ -537,13 +547,6 @@ class DebugViewProvider implements vscode.WebviewViewProvider {
 						} catch (error) {
 							console.error(error);
 						}
-						break;
-					}
-				case 'removeRepo':
-					{
-						let directoryPath = this._globalStorage.path;
-						//exec(`rm -rf ${directoryPath}`);
-						clearDirectory(directoryPath);
 						break;
 					}
 				case 'createCommit':
@@ -611,6 +614,17 @@ class DebugViewProvider implements vscode.WebviewViewProvider {
 							const changeLog = await summarizeChanges(data.parentCommit, log[0].oid, workspaceFolder, gitLoc, this._ctx);
 							vscode.commands.executeCommand('extension.updateSummary', activeNode, changeLog);
 							vscode.commands.executeCommand('extension.updateNodeText', activeNode, changeLog[0]);
+						}
+						break;
+					}
+				case 'exportData':
+					{
+						const fullData = data.treeData;
+						const ok = await vscode.commands.executeCommand<boolean>('extension.exportData', fullData);
+						if (ok) {
+							graphView?.dispose();           // close the panel
+							graphView?.webview.postMessage({ command: 'updateGraph', treeData: [], activeNode: 0 });
+							this.receiveInformation('clearVizState', {});
 						}
 						break;
 					}
@@ -856,50 +870,6 @@ async function saveJsonFile(folderLocation: string, data: {}) {
 	});
 }
 
-//Delete functionality to work cross platform
-function clearDirectory(dirPath: string) {
-	// Check for paths on Windows and remove the leading slash if it is Windows
-	if (process.platform === 'win32' && dirPath.startsWith('/')) {
-		dirPath = dirPath.substring(1); // Remove the leading slash for Windows
-	}
-	fs.readdir(dirPath, (err, files) => {
-		if (err) {
-			console.error(`Error reading directory: ${err}`);
-			return;
-		}
-
-		const deletePromises: Promise<void>[] = files.map(file => {
-			const filePath = path.join(dirPath, file);
-			return new Promise((resolve, reject) => {
-				fs.stat(filePath, (err, stats) => {
-					if (err) {
-						return reject(err);
-					}
-					if (stats.isDirectory()) {
-						fs.rm(filePath, { recursive: true }, (err) => {
-							if (err) { return reject(err); }
-							resolve();
-						});
-					} else {
-						fs.unlink(filePath, (err) => {
-							if (err) { return reject(err); }
-							resolve();
-						});
-					}
-				});
-			});
-		});
-
-		Promise.all(deletePromises)
-			.then(() => {
-				console.log(`Directory contents removed successfully`);
-			})
-			.catch(error => {
-				console.error(`Error deleting files: ${error}`);
-			});
-	});
-}
-
 //Make this an API call on a server if there is time... 
 async function summarizeChanges(parentCommit: string, newCommit: string, dir: string, gdir: string, ctx: vscode.ExtensionContext) {
 
@@ -960,5 +930,119 @@ async function summarizeChanges(parentCommit: string, newCommit: string, dir: st
 
 	return [summary, diffs];
 }
+
+/* ---------------------- Helpers (VS Code FS only) ---------------------- */
+
+async function exists(uri: vscode.Uri): Promise<boolean> {
+	try {
+	  await vscode.workspace.fs.stat(uri);
+	  return true;
+	} catch {
+	  return false;
+	}
+  }
+  
+  async function safeMkdir(uri: vscode.Uri): Promise<void> {
+	try {
+	  await vscode.workspace.fs.createDirectory(uri);
+	} catch {
+	  // Directory may already exist; ignore
+	}
+  }
+  
+  /**
+   * Recursively copy a folder (or file) tree using VS Code FS APIs.
+   * Handles File, Directory, and SymbolicLink entries.
+   */
+  async function copyTree(src: vscode.Uri, dst: vscode.Uri): Promise<void> {
+	const stat = await vscode.workspace.fs.stat(src);
+  
+	// Directory
+	if (stat.type & vscode.FileType.Directory) {
+	  await safeMkdir(dst);
+	  const entries = await vscode.workspace.fs.readDirectory(src);
+	  for (const [name, type] of entries) {
+		const from = vscode.Uri.joinPath(src, name);
+		const to = vscode.Uri.joinPath(dst, name);
+  
+		if (type & vscode.FileType.Directory) {
+		  await copyTree(from, to);
+		} else if (type & vscode.FileType.File) {
+		  await vscode.workspace.fs.copy(from, to, { overwrite: true });
+		} else if (type & vscode.FileType.SymbolicLink) {
+		  // Attempt a direct copy; if the backing FS supports it, this will work.
+		  // Otherwise you could resolve the link target if your environment requires.
+		  try {
+			await vscode.workspace.fs.copy(from, to, { overwrite: true });
+		  } catch {
+			// Fall back to no-op if symlink copy isn’t supported in the current FS.
+		  }
+		}
+	  }
+	  return;
+	}
+  
+	// File (or symlink treated as file)
+	await vscode.workspace.fs.copy(src, dst, { overwrite: true });
+  }
+  
+  /** Write a JSON object to a file via VS Code FS. */
+  async function writeJson(uri: vscode.Uri, data: unknown): Promise<void> {
+	const json = JSON.stringify(data, null, 2);
+	// Uint8Array payload (Buffer works in Node, but Uint8Array is universal)
+	await vscode.workspace.fs.writeFile(uri, new TextEncoder().encode(json));
+  }
+  
+  /**
+   * Clear a directory by deleting and re-creating it.
+   * Safer and cross-platform vs hand-rolled rm/unlink logic.
+   */
+  async function clearDirectory(dirUri: vscode.Uri): Promise<void> {
+	try {
+	  await vscode.workspace.fs.delete(dirUri, { recursive: true, useTrash: false });
+	} catch {
+	  // ignore if not present
+	}
+	await vscode.workspace.fs.createDirectory(dirUri);
+  }
+
+  function getGitDirUri(ctx: vscode.ExtensionContext): vscode.Uri {
+	return ctx.globalStorageUri;
+  }
+
+  // --- helpers ---
+async function pickExportFolderNameFromFirstPy(workspaceFolder: vscode.Uri): Promise<string> {
+	// look for the first .py file, skipping common noise
+	const include = new vscode.RelativePattern(workspaceFolder, '**/*.py');
+	const exclude = new vscode.RelativePattern(
+	  workspaceFolder,
+	  '{**/.venv/**,**/venv/**,**/env/**,**/__pycache__/**,**/site-packages/**,**/node_modules/**,**/.git/**}'
+	);
+	const [match] = await vscode.workspace.findFiles(include, exclude, 1);
+	if (!match) return ''; // no .py found
+	const stem = match.path.split('/').pop()!.replace(/\.py$/i, ''); // uri.path always uses '/'
+	return sanitizeName(stem);
+  }
+  
+  function sanitizeName(name: string): string {
+	// replace spaces with '-', drop weird chars, cap length
+	const cleaned = name.trim().replace(/\s+/g, '-').replace(/[^\w.-]/g, '_').slice(0, 64);
+	return cleaned || 'export';
+  }
+  
+  async function py_exists(uri: vscode.Uri): Promise<boolean> {
+	try { await vscode.workspace.fs.stat(uri); return true; } catch { return false; }
+  }
+  
+  // ensure we don't clobber an existing folder; returns the created dir
+  async function ensureUniqueExportDir(parent: vscode.Uri, baseName: string): Promise<vscode.Uri> {
+	let candidate = vscode.Uri.joinPath(parent, baseName);
+	let i = 1;
+	while (await py_exists(candidate)) {
+	  candidate = vscode.Uri.joinPath(parent, `${baseName}-${i++}`);
+	}
+	await vscode.workspace.fs.createDirectory(candidate);
+	return candidate;
+  }
 
 export function deactivate() {}

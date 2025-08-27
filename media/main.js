@@ -6,6 +6,18 @@
 
   let workSpaceName = workspaceData;
 
+  // --- simple CSS for visibility + layout (keeps .hidden working) ---
+  const style = document.createElement('style');
+  style.textContent = `
+    .hidden { display: none !important; }
+    .visible { display: block; }
+    /* layout for view2 so children stack and center (no overlap) */
+    #view2.stack { display: flex; flex-direction: column; align-items: center; gap: 12px; }
+    #end_bug { display: flex; justify-content: center; }
+    #logoImg { display: block; max-width: 90vw; height: auto; margin-top: 8px; }
+  `;
+  document.head.appendChild(style);
+
   //get node tree state
   let nodes;
   let nodeCount;
@@ -42,37 +54,32 @@
           <br/>
       </div>
       <div id="view2" class="hidden">
-        <br/>
-          <div class="end_bug">
+          <div id="end_bug">
             <button id="closeIssue">Finished</button>
           </div>
       </div>
   `;
 
-  // --- 64×64 logo (append after document.body.innerHTML) ---
+  const view2El = document.getElementById('view2');
+  view2El.classList.add('stack');
+
+  // --- Logo mounted after the button, in normal flow (no overlap) ---
   (function mountLogo() {
     const url = (window.__ASSETS__ && window.__ASSETS__.logo) || '';
     if (!url) { return; }
 
-    const target = document.getElementById('view2') || document.body; // choose your target
+    const anchor = document.getElementById('end_bug');
+    const img = document.createElement('img');
+    img.id = 'logoImg';
+    img.src = url;
+    img.alt = 'Logo';
+    img.width = 128;
 
-    const logoDiv = document.createElement('div');
-    logoDiv.id = 'logo64';
-    logoDiv.style.width = '128px';
-    logoDiv.style.height = '128px';
-    logoDiv.style.backgroundImage = `url("${url}")`;
-    logoDiv.style.backgroundSize = 'contain';
-    logoDiv.style.backgroundRepeat = 'no-repeat';
-    logoDiv.style.backgroundPosition = 'center';
-
-    // position it inside the view (adjust as you like)
-    logoDiv.style.position = 'fixed';
-    logoDiv.style.left = '50%';
-    logoDiv.style.top  = '50%';
-    logoDiv.style.transform = 'translate(-50%, -50%)';
-    logoDiv.style.zIndex = '10';
-
-    target.appendChild(logoDiv);
+    if (anchor && anchor.parentNode) {
+      anchor.parentNode.insertBefore(img, anchor.nextSibling);
+    } else {
+      view2El.appendChild(img);
+    }
   })();
 
 
@@ -81,10 +88,7 @@
 
   // @ts-ignore: Object is possibly 'null'.
   document.getElementById('startIssue').addEventListener('click', () => { showView('view2'); createNewIssue(); });
-
-  /* TESTING ONLY */
-  //document.getElementById('clearState')?.addEventListener('click', () => emptyState());
-  //document.getElementById('clearStatus')?.addEventListener('click', () => resetStatus());
+  document.getElementById('end_bug').addEventListener('click', () => { showView('view1'); onExportClick(); });
 
   showView(nodes);
 
@@ -333,6 +337,13 @@
                 });
                 break;
               }
+            case 'clearVizState':
+              {
+                clearModel();
+                showView([]);        // force UI to empty
+                localStorage.clear();
+                break;
+              }
       }
   });
 
@@ -352,15 +363,23 @@
       vscode.postMessage({ type: 'initializeRepo' });
   }
 
-  /* For testing only! */
-  function emptyState() {
-      nodeCount = 0;
-      activeNode = 0;
-      vscode.setState({ root: -1, nodeCount: nodeCount, activeNode: activeNode, nodes: {} });
-      showView([]);
-      localStorage.clear();
-      vscode.postMessage({ type: 'removeRepo' });
+  // Build a serializable snapshot of your viz state
+  function buildTreeSnapshot() {
+    // adapt to your state vars
+    return { root, nodeCount, activeNode, nodes };
   }
+
+  function clearModel() {
+    root = -1;           // or 0—pick a consistent sentinel across your app
+    nodeCount = 0;
+    activeNode = 0;
+    nodes = {};
+    vscode.setState({ root, nodeCount, activeNode, nodes });  // persist cleared
+  }
+
+  function onExportClick() {
+    vscode.postMessage({ type: 'exportData', treeData: buildTreeSnapshot() });
+}
 
   /* Testing */
   function resetStatus() {
