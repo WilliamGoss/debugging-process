@@ -381,17 +381,28 @@ export async function activate(context: vscode.ExtensionContext) {
 			  await vscode.window.withProgress(
 				{ location: vscode.ProgressLocation.Notification, title: 'Exporting .git and viz data…' },
 				async () => {
-				  await safeMkdir(vizDestUri);
+					await safeMkdir(exportRoot);
+				  	await safeMkdir(vizDestUri);
 	  
-				  if (await exists(gitSourceUri)) {
-					await copyTree(gitSourceUri, gitDestUri);
-				  } else {
-					vscode.window.showWarningMessage(
-					  'No Git repo found in globalStorage; skipping Git export.'
-					);
-				  }
+				  	if (await exists(gitSourceUri)) {
+						await copyTree(gitSourceUri, gitDestUri);
+				  	} else {
+						vscode.window.showWarningMessage(
+					  	'No Git repo found in globalStorage; skipping Git export.'
+						);
+				  	}
 	  
-				  await writeJson(dataFileUri, treeData);
+				  	await writeJson(dataFileUri, treeData);
+
+					// --- Copy the single .py into exportRoot (same level as git/ and viz/) ---
+					const pySrc = await findSinglePyFile(workspaceFolder);
+					if (pySrc) {
+						const pyName = pySrc.path.split('/').pop()!; // uri.path always uses '/'
+						const pyDest = vscode.Uri.joinPath(exportRoot, pyName);
+						await vscode.workspace.fs.copy(pySrc, pyDest, { overwrite: true });
+					} else {
+						vscode.window.showWarningMessage('No Python file found to include in the export.');
+					}
 	  
 				  // If you truly want to wipe storage after export, keep this line.
 				  // Otherwise, comment it out so users can keep working:
@@ -409,6 +420,98 @@ export async function activate(context: vscode.ExtensionContext) {
 		  }
 		)
 	  );
+
+	  //Remove data
+	  context.subscriptions.push(
+		vscode.commands.registerCommand('extension.clearHiddenRepo', async (): Promise<boolean> => {
+		  try {
+			await clearDirectory(context.globalStorageUri);
+			graphView?.dispose();
+			graphView?.webview.postMessage({ command: 'updateGraph', treeData: [], activeNode: 0 });
+			provider.receiveInformation('clearVizState', {});
+			return true;
+		  } catch (e) {
+			console.error(e);
+			return false;
+		  }
+		})
+	  );
+
+	  // helper: read JSON file via VS Code FS
+async function readJson<T = any>(uri: vscode.Uri): Promise<T> {
+	const bytes = await vscode.workspace.fs.readFile(uri);
+	return JSON.parse(new TextDecoder().decode(bytes)) as T;
+  }
+  
+  context.subscriptions.push(
+	vscode.commands.registerCommand('extension.restoreData', async (): Promise<boolean> => {
+		console.log("yoiooi");
+	  try {
+		// Let user pick the exported folder (that contains git/ and viz/data.json)
+		const picked = await vscode.window.showOpenDialog({
+		  canSelectFiles: false,
+		  canSelectFolders: true,
+		  canSelectMany: false,
+		  openLabel: 'Select export folder (contains git/ and viz/)'
+		});
+		if (!picked?.[0]) return false;
+  
+		// Expect structure: <picked>/git , <picked>/viz/data.json
+		let exportRoot = picked[0];
+		let gitSrc = vscode.Uri.joinPath(exportRoot, 'git');
+		let vizDir = vscode.Uri.joinPath(exportRoot, 'viz');
+		let dataFile = vscode.Uri.joinPath(vizDir, 'data.json');
+  
+		// If user selected the parent, try to find a child that matches export-* shape (optional but handy)
+		if (!(await exists(gitSrc)) || !(await exists(dataFile))) {
+		  const entries = await vscode.workspace.fs.readDirectory(exportRoot);
+		  const candidate = entries.find(([name, type]) => (type & vscode.FileType.Directory) && /^export-/.test(name));
+		  if (candidate) {
+			exportRoot = vscode.Uri.joinPath(exportRoot, candidate[0]);
+			gitSrc = vscode.Uri.joinPath(exportRoot, 'git');
+			vizDir = vscode.Uri.joinPath(exportRoot, 'viz');
+			dataFile = vscode.Uri.joinPath(vizDir, 'data.json');
+		  }
+		}
+  
+		if (!(await exists(gitSrc))) {
+		  vscode.window.showErrorMessage('Selected folder does not contain a git/ directory.');
+		  return false;
+		}
+		if (!(await exists(dataFile))) {
+		  vscode.window.showErrorMessage('Selected folder does not contain viz/data.json.');
+		  return false;
+		}
+  
+		// Copy git/ back to globalStorage and load viz state
+		await vscode.window.withProgress(
+		  { location: vscode.ProgressLocation.Notification, title: 'Restoring repository and visualization…' },
+		  async () => {
+			// 1) wipe current hidden repo, then copy restored one into globalStorage root
+			await clearDirectory(context.globalStorageUri);
+			await copyTree(gitSrc, context.globalStorageUri);
+  
+			// 2) read viz snapshot
+			const snapshot = await readJson<{ root: number; nodeCount: number; activeNode: number; nodes: Record<string, any> }>(dataFile);
+  
+			// 3) tell the sidebar to adopt this state
+			provider.receiveInformation('setVizState', snapshot);
+  
+			// 4) open/re-render the canvas with this data
+			const nodeArray = Object.values(snapshot?.nodes ?? {});
+			await vscode.commands.executeCommand('extension.showD3Graph', nodeArray, snapshot?.activeNode ?? 0);
+		  }
+		);
+  
+		vscode.window.showInformationMessage('Restore complete.');
+		return true;
+	  } catch (err) {
+		console.error('restoreData failed:', err);
+		vscode.window.showErrorMessage('Restore failed. See logs for details.');
+		return false;
+	  }
+	})
+  );
 
 	//New View
 	context.subscriptions.push(
@@ -622,10 +725,18 @@ class DebugViewProvider implements vscode.WebviewViewProvider {
 						const fullData = data.treeData;
 						const ok = await vscode.commands.executeCommand<boolean>('extension.exportData', fullData);
 						if (ok) {
-							graphView?.dispose();           // close the panel
-							graphView?.webview.postMessage({ command: 'updateGraph', treeData: [], activeNode: 0 });
-							this.receiveInformation('clearVizState', {});
+							this.receiveInformation('goToClearView', {});
 						}
+						break;
+					}
+				case 'clearHiddenRepo':
+					{
+						vscode.commands.executeCommand<boolean>('extension.clearHiddenRepo');
+						break;
+					}
+				case 'restoreData':
+					{
+						vscode.commands.executeCommand<boolean>('extension.restoreData');
 						break;
 					}
 			}
@@ -1043,6 +1154,17 @@ async function pickExportFolderNameFromFirstPy(workspaceFolder: vscode.Uri): Pro
 	}
 	await vscode.workspace.fs.createDirectory(candidate);
 	return candidate;
+  }
+
+  // Find the single *.py file in the workspace (skips venvs, cache, etc.)
+async function findSinglePyFile(workspaceFolder: vscode.Uri): Promise<vscode.Uri | undefined> {
+	const include = new vscode.RelativePattern(workspaceFolder, '**/*.py');
+	const exclude = new vscode.RelativePattern(
+	  workspaceFolder,
+	  '{**/.venv/**,**/venv/**,**/env/**,**/__pycache__/**,**/site-packages/**,**/node_modules/**,**/.git/**}'
+	);
+	const [match] = await vscode.workspace.findFiles(include, exclude, 1);
+	return match;
   }
 
 export function deactivate() {}

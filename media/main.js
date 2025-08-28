@@ -52,10 +52,25 @@
           <br/>
           <button id="startIssue">Open Issue</button>
           <br/>
+          <br/>
+          <br/>
+          <button id="restoreIssue"
+            style="background:var(--vscode-button-secondaryBackground);
+                  color:var(--vscode-button-secondaryForeground);
+                  border:1px solid var(--vscode-button-border,transparent);">
+            Restore Issue
+          </button>
       </div>
       <div id="view2" class="hidden">
           <div id="end_bug">
             <button id="closeIssue">Finished</button>
+          </div>
+      </div>
+      <div id="view3" class="hidden">
+          <p> Please do not clear data until after being told to do so! </p>
+          </br>
+          <div id="clear_data">
+            <button id="clearData">Clear Data</button>
           </div>
       </div>
   `;
@@ -82,32 +97,54 @@
     }
   })();
 
+  //helper for entering a staging area for reflection
+  let clearState = false;
+
+  const clearBtn = document.getElementById('clearData');
+  if (clearBtn) {
+    clearBtn.addEventListener('click', () => {
+      clearModel();
+      clearState = false;         // leave "clear view" mode if you use that flag
+      showView();                 // re-render based on current state (no arg)
+      localStorage.clear();       // if you’re persisting anything
+      vscode.postMessage({ type: 'clearHiddenRepo' });
+    });
+  }
 
   // Call the function to update textarea with the node's name
   updateExplorationText();
 
   // @ts-ignore: Object is possibly 'null'.
-  document.getElementById('startIssue').addEventListener('click', () => { showView('view2'); createNewIssue(); });
-  document.getElementById('end_bug').addEventListener('click', () => { showView('view1'); onExportClick(); });
+  document.getElementById('startIssue').addEventListener('click', () => { showView(); createNewIssue(); });
+  document.getElementById('end_bug').addEventListener('click', () => { showView(); onExportClick(); });
+  document.getElementById('restoreIssue').addEventListener('click', () => { restoreIssue(); });
 
   showView(nodes);
 
-  function showView(nodes) {
-      if (workSpaceName === "null") {
-          viewId = 'view0';
-      }
-      else if (Object.keys(nodes).length === 0) {
-          viewId = 'view1';
-      } else {
-          viewId = 'view2';
-      }
-      const views = ['view0', 'view1', 'view2'];
-      views.forEach(view => {
-          // @ts-ignore: Object is possibly 'null'.
-          document.getElementById(view).classList.toggle('visible', view === viewId);
-          // @ts-ignore: Object is possibly 'null'.
-          document.getElementById(view).classList.toggle('hidden', view !== viewId);
-      });
+  function showView() {
+    // ensure nodes is an object
+    if (!nodes || typeof nodes !== 'object' || Array.isArray(nodes)) { nodes = {}; }
+  
+    const hasNodes = Object.keys(nodes).length > 0;
+  
+    if (workSpaceName === "null") {
+      viewId = 'view0';
+    } else if (!hasNodes) {
+      viewId = 'view1';
+    } else if (clearState) {
+      // when you're in "clear" mode, show the clearing view
+      viewId = 'view3';
+    } else {
+      // normal working view with nodes
+      viewId = 'view2';
+    }
+  
+    ['view0','view1','view2','view3'].forEach(id => {
+      const el = document.getElementById(id);
+      if (!el) { return; }
+      el.classList.toggle('visible', id === viewId);
+      el.classList.toggle('hidden',  id !== viewId);
+    });
   }
 
   // Handle messages sent from the extension to the webview
@@ -337,11 +374,23 @@
                 });
                 break;
               }
-            case 'clearVizState':
+            case 'goToClearView':
               {
-                clearModel();
-                showView([]);        // force UI to empty
-                localStorage.clear();
+                clearState = true;
+                viewId = 'view3';
+                showView();
+                break;
+              }
+            case 'setVizState': 
+              {
+                const s = message.data || {};
+                nodes = s.nodes || {};
+                nodeCount = Number.isFinite(s.nodeCount) ? s.nodeCount : Object.keys(nodes).length;
+                activeNode = (typeof s.activeNode === 'number') ? s.activeNode : 0;
+                root = (typeof s.root === 'number') ? s.root : (Object.keys(nodes).length ? 0 : -1);
+              
+                vscode.setState({ root, nodeCount, activeNode, nodes });
+                showView();  // re-evaluate which view to show
                 break;
               }
       }
@@ -363,6 +412,7 @@
       vscode.postMessage({ type: 'initializeRepo' });
       let nodeArray = Object.values(nodes);
       vscode.postMessage({ type: 'updateGraph', command: "showD3Graph", treeData: nodeArray, activeNode: 0 });
+      showView();
   }
 
   // Build a serializable snapshot of your viz state
@@ -377,6 +427,7 @@
     activeNode = 0;
     nodes = {};
     vscode.setState({ root, nodeCount, activeNode, nodes });  // persist cleared
+    clearState = false;
   }
 
   function onExportClick() {
@@ -401,6 +452,11 @@
 
       const textarea = document.querySelector('#view2 textarea[name="exploration"]');
       if (textarea) { textarea.value = node.text || ''; }
+  }
+
+  //restore prior exploration
+  function restoreIssue() {
+    vscode.postMessage({type: "restoreData"});
   }
 
   //diff object into hunks

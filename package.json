@@ -51,6 +51,10 @@
         "title": "Export Data"
       },
       {
+        "command": "extension.clearHiddenRepo",
+        "title": "Clear Hidden Repo"
+      },
+      {
         "command": "extension.updateSummary",
         "title": "Update Summary"
       },
