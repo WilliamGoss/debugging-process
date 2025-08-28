@@ -445,7 +445,6 @@ async function readJson<T = any>(uri: vscode.Uri): Promise<T> {
   
   context.subscriptions.push(
 	vscode.commands.registerCommand('extension.restoreData', async (): Promise<boolean> => {
-		console.log("yoiooi");
 	  try {
 		// Let user pick the exported folder (that contains git/ and viz/data.json)
 		const picked = await vscode.window.showOpenDialog({
@@ -454,7 +453,7 @@ async function readJson<T = any>(uri: vscode.Uri): Promise<T> {
 		  canSelectMany: false,
 		  openLabel: 'Select export folder (contains git/ and viz/)'
 		});
-		if (!picked?.[0]) return false;
+		if (!picked?.[0]) { return false; }
   
 		// Expect structure: <picked>/git , <picked>/viz/data.json
 		let exportRoot = picked[0];
