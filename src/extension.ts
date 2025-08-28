@@ -3,7 +3,7 @@ import * as git from "isomorphic-git";
 import fs from 'fs';
 import * as path from 'path';
 import OpenAI from "openai";
-import { diffLines } from 'diff';
+import * as Diff from 'diff'; // if not already imported
 
 import { CanvasViewProvider } from './panels/CanvasViewProvider';
 //Python Interpreter for Output/Error
@@ -151,7 +151,7 @@ export async function activate(context: vscode.ExtensionContext) {
                 // sections between the previous run and the current state.  If
                 // diffLines returns a sequence where no part is marked as
                 // added or removed then nothing substantive has changed.
-                const diffs = diffLines(lastContent, currentContent);
+                const diffs = Diff.diffLines(lastContent, currentContent);
                 const hasChanges = diffs.some(part => (part as any).added || (part as any).removed);
 
                 if (hasChanges || !(filePath in previousFileContents)) {
@@ -980,65 +980,77 @@ async function saveJsonFile(folderLocation: string, data: {}) {
 	});
 }
 
-//Make this an API call on a server if there is time... 
-async function summarizeChanges(parentCommit: string, newCommit: string, dir: string, gdir: string, ctx: vscode.ExtensionContext) {
+function extractAddedRemoved(diffs: Diff.Change[]) {
+  const toLines = (s: string) =>
+    s.split(/\r?\n/).map(l => l.trimEnd()).filter(l => l.length > 0);
 
-	const files = fs.readdirSync(dir);
-	const pyFiles = files.filter( f => f.endsWith('.py'));
-	const absFilePath = path.join(dir, pyFiles[0]).substring(1);
-	const filepath = pyFiles[0];
+  const added_lines: string[] = [];
+  const removed_lines: string[] = [];
 
-	const { blob: blob1 } = await git.readBlob({ 
-		fs, 
-		dir: dir, 
-		gitdir: gdir, 
-		oid: parentCommit, 
-		filepath 
-	});
-	const text1 = new TextDecoder().decode(blob1);
-	
-	const { blob: blob2 } = await git.readBlob({ 
-		fs, 
-		dir, 
-		gitdir: gdir,
-		oid: newCommit,
-		 filepath 
-	});
-	const text2 = new TextDecoder().decode(blob2);
+  for (const part of diffs) {
+    if (part.added) {
+      added_lines.push(...toLines(part.value));
+    } else if (part.removed) {
+      removed_lines.push(...toLines(part.value));
+    }
+  }
+  return { added_lines, removed_lines };
+}
 
-	const diffs = diffLines(text1, text2);
-	
-	const diffString = JSON.stringify(diffs);
+async function summarizeChanges(
+  parentCommit: string,
+  newCommit: string,
+  dir: string,
+  gdir: string,
+  ctx: vscode.ExtensionContext
+) {
+  const files = fs.readdirSync(dir);
+  const pyFiles = files.filter(f => f.endsWith('.py'));
+  if (pyFiles.length === 0) {
+    return ["No summary available.", []];
+  }
+  const filepath = pyFiles[0];
 
-	// Point to your Flask endpoint
-	const FLASK_URL =
-	process.env.FLASK_URL ?? "https://debugging.web.illinois.edu/request_summary";
+  const { blob: blob1 } = await git.readBlob({ fs, dir, gitdir: gdir, oid: parentCommit, filepath });
+  const text1 = new TextDecoder().decode(blob1);
 
-	const summary = await (async () => {
-	const ac = new AbortController();
-	const timer = setTimeout(() => ac.abort(), 10_000); // 10s timeout
+  const { blob: blob2 } = await git.readBlob({ fs, dir, gitdir: gdir, oid: newCommit, filepath });
+  const text2 = new TextDecoder().decode(blob2);
 
-	try {
-	const res = await fetch(FLASK_URL, {
-		method: "POST",
-		headers: { "Content-Type": "application/json" },
-		body: JSON.stringify({ diffString }),
-		signal: ac.signal,
-	});
-	clearTimeout(timer);
+  const diffs = Diff.diffLines(text1, text2);
+  const { added_lines, removed_lines } = extractAddedRemoved(diffs);
 
-	if (!res.ok) { throw new Error(`HTTP ${res.status}`); }
+  // Flask endpoint
+  const FLASK_URL = process.env.FLASK_URL ?? "https://debugging.web.illinois.edu/request_summary";
 
-	const data = (await res.json()) as { summary?: string };
-	const s = (data.summary ?? "").trim();
-	return s || "No summary available.";
-	} catch (err) {
-	// Optionally log err to your extension output channel
-	return "No summary available.";
-	}
-	})();
+  const summary = await (async () => {
+    const ac = new AbortController();
+    const timer = setTimeout(() => ac.abort(), 10_000);
 
-	return [summary, diffs];
+    try {
+      const res = await fetch(FLASK_URL, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          original_code: text1,
+          added_lines,
+          removed_lines,
+        }),
+        signal: ac.signal,
+      });
+      clearTimeout(timer);
+
+      if (!res.ok) { throw new Error(`HTTP ${res.status}`); }
+
+      const data = (await res.json()) as { summary?: string };
+      const s = (data.summary ?? "").trim();
+      return s || "No summary available.";
+    } catch (_err) {
+      return "No summary available.";
+    }
+  })();
+
+  return [summary, diffs];
 }
 
 /* ---------------------- Helpers (VS Code FS only) ---------------------- */
